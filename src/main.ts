@@ -1,60 +1,56 @@
-import './style.css'
-import typescriptLogo from './assets/typescript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.ts'
+import './style.css';
+import * as THREE from 'three';
+import { GameScene } from './scene';
+import { FollowCamera } from './camera';
+import { Player } from './player';
+import { Target } from './target';
+import { InputManager } from './input';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${typescriptLogo}" class="framework" alt="TypeScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.ts</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const appContainer = document.querySelector<HTMLDivElement>('#app');
 
-<div class="ticks"></div>
+if (!appContainer) {
+    throw new Error('Container #app não encontrado.');
+}
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://www.typescriptlang.org" target="_blank">
-          <img class="button-icon" src="${typescriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+// 1. Inicializa subsistemas
+const gameScene = new GameScene(appContainer);
+const cameraSystem = new FollowCamera();
+const input = new InputManager();
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+// Fixando a proporção da câmera no redimensionamento da janela
+window.addEventListener('resize', () => {
+    cameraSystem.camera.aspect = window.innerWidth / window.innerHeight;
+    cameraSystem.camera.updateProjectionMatrix();
+});
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+// 2. Instancia entidades
+const player = new Player();
+gameScene.scene.add(player.mesh);
+
+const targets: Target[] = [
+    new Target(new THREE.Vector3(-3, 0, -5)),
+    new Target(new THREE.Vector3(3, 0, -5))
+];
+targets.forEach(t => gameScene.scene.add(t.mesh));
+
+// 3. Game Loop
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+    
+    const delta = clock.getDelta();
+
+    // Atualiza lógica das entidades
+    player.update(delta, input, cameraSystem.camera, targets);
+    targets.forEach(t => t.update(delta));
+    
+    // Atualiza câmera
+    cameraSystem.update(player.mesh.position, delta);
+
+    // Renderiza a cena
+    gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
+}
+
+// Inicia
+animate();
