@@ -36,4 +36,13 @@ export class GameScene {
     private onWindowResize(): void {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
+
+    public setEnvironmentColor(colorHex: number, density: number) {
+        // O FogExp2 cria o efeito de névoa baseado em densidade
+        this.scene.fog = new THREE.FogExp2(colorHex, density);
+        
+        // Ajustar a cor do background para a mesma cor do fog é essencial
+        // no Three.js para criar a ilusão de um ambiente infinito
+        this.scene.background = new THREE.Color(colorHex);
+    }
 }

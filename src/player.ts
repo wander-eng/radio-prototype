@@ -16,6 +16,16 @@ export class Player {
         this.mesh.position.y = 1; // Centro em Y = 1 para pisar no chão
     }
 
+    // Adicione este método dentro da classe Player (pode ser logo após o constructor):
+    public setEmissiveColor(colorHex: number) {
+        const material = this.mesh.material as THREE.MeshStandardMaterial;
+        material.emissive.setHex(colorHex);
+        material.emissiveIntensity = 1.0; 
+        
+        // Garante que a cor base também acompanhe a identidade visual
+        material.color.setHex(colorHex); 
+    }
+
     public update(delta: number, input: InputManager, camera: THREE.Camera, targets: Target[]) {
         if (this.attackCooldown > 0) {
             this.attackCooldown -= delta;
