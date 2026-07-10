@@ -4,8 +4,17 @@ export class AudioManager {
     private tracks: Map<string, { source: AudioBufferSourceNode, gain: GainNode }> = new Map();
     private initialized = false;
 
+    public musicGain: GainNode;
+    public sfxGain: GainNode;
+
     constructor() {
         this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        this.musicGain = this.ctx.createGain();
+        this.sfxGain = this.ctx.createGain();
+        
+        this.musicGain.connect(this.ctx.destination);
+        this.sfxGain.connect(this.ctx.destination);
     }
 
     public async init() {
@@ -14,7 +23,6 @@ export class AudioManager {
         this.initialized = true;
     }
 
-    // Carrega todos os áudios necessários
     public async loadAll() {
         const files = [
             { id: 'phonk', url: '/audio/phonk.mp3' },
@@ -32,42 +40,37 @@ export class AudioManager {
         });
 
         await Promise.all(promises);
-
-        // Prepara as tracks de música em loop, inicialmente silenciadas
-        this.setupTrack('phonk');
-        this.setupTrack('samba');
-        this.setupTrack('forro');
+        this.setupTracks();
     }
 
-    private setupTrack(id: string) {
-        const buffer = this.buffers.get(id);
-        if (!buffer) return;
-
-        const gainNode = this.ctx.createGain();
-        gainNode.gain.value = 0; // Começa no volume zero
-        gainNode.connect(this.ctx.destination);
-
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        source.connect(gainNode);
-        source.start(0);
-
-        this.tracks.set(id, { source, gain: gainNode });
+    private setupTracks() {
+        ['phonk', 'samba', 'forro'].forEach(id => {
+            const buffer = this.buffers.get(id);
+            if (buffer) {
+                const source = this.ctx.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const gain = this.ctx.createGain();
+                gain.gain.value = 0; 
+                
+                source.connect(gain);
+                gain.connect(this.musicGain); 
+                source.start(0);
+                
+                this.tracks.set(id, { source, gain });
+            }
+        });
     }
 
-    public crossfade(fromId: string | null, toId: string, duration = 0.2) {
+    public crossfade(fromId: string | null, toId: string, duration: number = 0.2) {
         const now = this.ctx.currentTime;
-
-        // Fade out da track atual (se existir)
         if (fromId && this.tracks.has(fromId)) {
             const fromGain = this.tracks.get(fromId)!.gain;
             fromGain.gain.cancelScheduledValues(now);
             fromGain.gain.setValueAtTime(fromGain.gain.value, now);
             fromGain.gain.linearRampToValueAtTime(0, now + duration);
         }
-
-        // Fade in da nova track
         if (this.tracks.has(toId)) {
             const toGain = this.tracks.get(toId)!.gain;
             toGain.gain.cancelScheduledValues(now);
@@ -84,16 +87,36 @@ export class AudioManager {
         if (staticBuffer) {
             const source = this.ctx.createBufferSource();
             source.buffer = staticBuffer;
-            source.connect(this.ctx.destination);
-            source.start(now); // Toca imediatamente
+            source.connect(this.sfxGain); 
+            source.start(now);
         }
 
         if (stingerBuffer) {
             const source = this.ctx.createBufferSource();
             source.buffer = stingerBuffer;
-            source.connect(this.ctx.destination);
-            // Atrasa levemente o stinger para sobrepor o fim do ruído estático
-            source.start(now + 0.1); 
+            source.connect(this.sfxGain); 
+            source.start(now);
+        }
+    }
+
+    public setMusicVolume(value: number) {
+        this.musicGain.gain.value = value;
+    }
+
+    public setSfxVolume(value: number) {
+        this.sfxGain.gain.value = value;
+    }
+
+    // --- NOVO: Congela e Descongela o tempo do motor de áudio ---
+    public pauseAudio() {
+        if (this.ctx.state === 'running') {
+            this.ctx.suspend();
+        }
+    }
+
+    public resumeAudio() {
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
         }
     }
 }

@@ -37,11 +37,21 @@ const audioManager = new AudioManager();
 const effectsManager = new EffectsManager(gameScene.scene, cameraSystem);
 const radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
 
+// Conecta as barras de volume do Menu de Pause ao Motor de Áudio
+hudManager.onMusicVolumeChange = (value: number) => audioManager.setMusicVolume(value);
+hudManager.onSfxVolumeChange = (value: number) => audioManager.setSfxVolume(value);
+
+// NOVO: Conecta o estado de Pause ao tempo do Motor de Áudio
+hudManager.onPause = () => audioManager.pauseAudio();
+hudManager.onResume = () => audioManager.resumeAudio();
+
 let gameStarted = false;
 
 const startGame = async () => {
     if (gameStarted) return;
     gameStarted = true;
+    
+    hudManager.hideStartMessage();
     
     await audioManager.init();
     await audioManager.loadAll();
@@ -50,33 +60,35 @@ const startGame = async () => {
 };
 
 window.addEventListener('keydown', startGame, { once: true });
-window.addEventListener('mousedown', startGame, { once: true }); // Tira a tela do estado pausado com o mouse também
+window.addEventListener('mousedown', startGame, { once: true }); 
 
-// Troca Direta (Teclado)
 window.addEventListener('keydown', (e) => {
     if (!gameStarted) return; 
     
+    // Captura o ESC para comandar o Menu
+    if (e.code === 'Escape') {
+        hudManager.handleEscape();
+        return;
+    }
+    
+    // Bloqueia interações do rádio se estiver pausado
+    if (hudManager.isPaused) return;
+
     if (e.code === 'Digit1') radioSystem.setStation(StationId.PHONK);
     if (e.code === 'Digit2') radioSystem.setStation(StationId.SAMBA);
     if (e.code === 'Digit3') radioSystem.setStation(StationId.FORRO);
 });
 
-// Troca Sequencial (Scroll do Mouse)
 window.addEventListener('wheel', (e) => {
-    if (!gameStarted || !radioSystem.currentStation) return;
+    if (!gameStarted || !radioSystem.currentStation || hudManager.isPaused) return;
     
     const stations = [StationId.PHONK, StationId.SAMBA, StationId.FORRO];
     const currentIndex = stations.indexOf(radioSystem.currentStation);
     
     let nextIndex = currentIndex;
     
-    if (e.deltaY > 0) {
-        // Scroll pra baixo: Avança
-        nextIndex = (currentIndex + 1) % stations.length;
-    } else if (e.deltaY < 0) {
-        // Scroll pra cima: Retorna
-        nextIndex = (currentIndex - 1 + stations.length) % stations.length;
-    }
+    if (e.deltaY > 0) nextIndex = (currentIndex + 1) % stations.length;
+    else if (e.deltaY < 0) nextIndex = (currentIndex - 1 + stations.length) % stations.length;
     
     radioSystem.setStation(stations[nextIndex]);
 });
@@ -97,6 +109,12 @@ function animate() {
     timer.update();
     const unscaledDelta = timer.getDelta();
     
+    // SE PAUSADO: Interrompe a lógica matemática, congelando movimento e física no lugar
+    if (hudManager.isPaused) {
+        gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
+        return;
+    }
+
     if (slowMoTimer > 0) {
         slowMoTimer -= unscaledDelta;
         if (slowMoTimer <= 0) timeScale = 1.0; 

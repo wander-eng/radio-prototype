@@ -90,31 +90,48 @@ export class Player {
         
         const wantsToAttack = input.isPressed('Space') || input.isPressed('MouseLeft');
         if (!this.isDashing && wantsToAttack) {
-            this.tryAttack(currentStation, input, camera); // Agora envia o mouse para a função de ataque
+            // Agora a função de ataque exige saber onde os alvos estão para calibrar a mira
+            this.tryAttack(currentStation, input, camera, targets); 
         }
 
         this.handleMovement(delta, input, camera, currentStation);
     }
 
-    // --- NOVO: Função de Mira por Raycast (Traduz o mouse para o mundo 3D) ---
-    private getMouseDirection(input: InputManager, camera: THREE.Camera): THREE.Vector3 {
+    // --- MIRA 3D CORRIGIDA (Raycast Inteligente) ---
+    private getMouseDirection(input: InputManager, camera: THREE.Camera, targets: Target[]): THREE.Vector3 {
+        // Se o jogador está jogando puramente no teclado (sem encostar no mouse), a mira segue o WASD
+        if (!input.mousePosition) {
+            return new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+        }
+
         const raycaster = new THREE.Raycaster();
         const mousePos = new THREE.Vector2(input.mousePosition.x, input.mousePosition.y);
         raycaster.setFromCamera(mousePos, camera);
 
-        // Cria um chão matemático (Plane) exato na altura do jogador para receber a mira
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.mesh.position.y);
-        const targetPoint = new THREE.Vector3();
+        // 1. TENTA ACERTAR O CORPO DOS INIMIGOS (Resolve o bug do ponto cego)
+        const targetMeshes = targets.filter(t => t.state === 'active').map(t => t.mesh);
+        const intersects = raycaster.intersectObjects(targetMeshes);
 
+        if (intersects.length > 0) {
+            // Se o mouse está sobre um inimigo, ignora a perspectiva e vira exatamente para o centro dele
+            const hitMesh = intersects[0].object;
+            const dir = hitMesh.position.clone().sub(this.mesh.position);
+            dir.y = 0; 
+            if (dir.lengthSq() > 0) return dir.normalize();
+        }
+
+        // 2. SE NÃO ESTIVER SOBRE UM INIMIGO, MIRA NO CHÃO
+        // O chão visual fica em Y=0
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const targetPoint = new THREE.Vector3();
         raycaster.ray.intersectPlane(plane, targetPoint);
 
         if (targetPoint) {
             const dir = targetPoint.sub(this.mesh.position);
-            dir.y = 0; // Trava o eixo Y para o boneco não tentar "olhar para cima/baixo"
+            dir.y = 0;
             if (dir.lengthSq() > 0) return dir.normalize();
         }
 
-        // Fallback caso o raycast falhe
         return new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
     }
 
@@ -123,7 +140,6 @@ export class Player {
             this.dashTimer -= delta;
             let speedMult = 3; 
             if (station === StationId.FORRO) {
-                // O Dash em arco do Forró continua seguindo o teclado para permitir "kiting" defensivo
                 const inputDir = this.getMovementDirection(input, camera);
                 if (inputDir.lengthSq() > 0) {
                     this.dashDirection.lerp(inputDir, 10 * delta).normalize();
@@ -171,8 +187,7 @@ export class Player {
 
         if (this.attackState === 'windup') {
             if (station === StationId.FORRO) {
-                // NOVO: O ataque contínuo do Forró agora persegue o MOUSE (Mira fluida)
-                const mouseDir = this.getMouseDirection(input, camera);
+                const mouseDir = this.getMouseDirection(input, camera, targets);
                 const targetRotation = Math.atan2(mouseDir.x, mouseDir.z);
                 const currentRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.mesh.rotation.y, 0));
                 const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetRotation, 0));
@@ -190,10 +205,9 @@ export class Player {
         }
     }
 
-    private tryAttack(station: StationId, input: InputManager, camera: THREE.Camera) {
-        // NOVO: Helper que gira o personagem pro mouse exatamente na hora que o golpe inicia
+    private tryAttack(station: StationId, input: InputManager, camera: THREE.Camera, targets: Target[]) {
         const snapToMouse = () => {
-            const mouseDir = this.getMouseDirection(input, camera);
+            const mouseDir = this.getMouseDirection(input, camera, targets);
             this.mesh.rotation.y = Math.atan2(mouseDir.x, mouseDir.z);
         };
 
@@ -233,10 +247,8 @@ export class Player {
         const playerForward = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
         const attackOrigin = this.mesh.position.clone();
         
-        // Ponto de impacto na ponta do alcance
+        // Mantemos os dois pontos de impacto (Ponta e Meio) para garantir a varredura completa do Forró
         const hitCenter = attackOrigin.clone().add(playerForward.clone().multiplyScalar(range));
-        
-        // NOVO: Ponto intermediário para eliminar o "ponto cego" de perto do Forró
         const midPoint = attackOrigin.clone().add(playerForward.clone().multiplyScalar(range * 0.5));
 
         const hits = targets.filter(t => {
@@ -244,7 +256,6 @@ export class Player {
             
             const distToCenter = t.mesh.position.distanceTo(hitCenter);
             
-            // Regra Forró: Verifica se o inimigo está na ponta OU no meio do caminho
             if (station === StationId.FORRO) {
                 const distToMid = t.mesh.position.distanceTo(midPoint);
                 return distToCenter <= 1.5 || distToMid <= 1.5;
@@ -323,7 +334,6 @@ export class Player {
 
         if (moveDir.lengthSq() > 0) {
             this.mesh.position.add(moveDir.multiplyScalar(currentSpeed * delta));
-            // A rotação de movimento agora cede prioridade para a rotação de ataque quando necessário
             if (this.attackState === 'idle') {
                 this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
             }

@@ -1,8 +1,8 @@
 export class InputManager {
     public keys: { [key: string]: boolean } = {};
     
-    // NOVO: Rastreia a posição 2D normalizada do mouse na tela (-1 a +1)
-    public mousePosition: { x: number, y: number } = { x: 0, y: 0 };
+    // NOVO: Inicializa nulo para proteger quem joga só no teclado
+    public mousePosition: { x: number, y: number } | null = null;
 
     constructor() {
         window.addEventListener('keydown', (e) => {
@@ -21,10 +21,11 @@ export class InputManager {
             if (e.button === 2) this.keys['MouseRight'] = false;
         });
         
-        // NOVO: Atualiza a coordenada sempre que o mouse se move
         window.addEventListener('mousemove', (e) => {
-            this.mousePosition.x = (e.clientX / window.innerWidth) * 2 - 1;
-            this.mousePosition.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            this.mousePosition = {
+                x: (e.clientX / window.innerWidth) * 2 - 1,
+                y: -(e.clientY / window.innerHeight) * 2 + 1
+            };
         });
         
         window.addEventListener('contextmenu', (e) => {
