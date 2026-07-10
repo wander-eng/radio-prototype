@@ -10,9 +10,16 @@ export class EffectsManager {
     private activeCameraEffect: StationId | null = null;
     private cameraTimer = 0;
 
-    // Estado das Partículas
+    // Estado das Partículas de Troca (Trilhas e Burst)
     private activeSpawners: { type: StationId, timer: number }[] = [];
     private particleSystems: { mesh: THREE.Points, velocities?: THREE.Vector3[], life: number, maxLife: number }[] = [];
+    
+    // NOVO: Estado dos Confetes (Samba Switch)
+    private confettiSystems: { group: THREE.Group, meshes: { mesh: THREE.Mesh, vel: THREE.Vector3, rot: THREE.Vector3 }[], life: number, maxLife: number }[] = [];
+
+    // NOVO: Estado da Aura Contínua
+    private auraParticles: { mesh: THREE.Points, life: number, maxLife: number, type: StationId, angle: number, radius: number, baseY: number }[] = [];
+    private auraTimer = 0;
 
     constructor(scene: THREE.Scene, cameraSystem: FollowCamera) {
         this.scene = scene;
@@ -23,7 +30,7 @@ export class EffectsManager {
         this.activeCameraEffect = station;
         this.cameraTimer = 0;
 
-        // Limpa qualquer efeito residual da câmera imediatamente
+        // Limpa efeito residual
         this.cameraSystem.lerpSpeed = 5;
         this.cameraSystem.positionalOffset.set(0, 0, 0);
         this.cameraSystem.angularOffset = 0;
@@ -31,30 +38,33 @@ export class EffectsManager {
         this.cameraSystem.camera.updateProjectionMatrix();
 
         if (station === StationId.PHONK) {
-            // Câmera: Zoom-punch instântaneo (reduz FOV para criar impacto)
+            // Intocado conforme especificação
             this.cameraSystem.camera.fov = 55; 
             this.cameraSystem.camera.updateProjectionMatrix();
-            // Partículas: Burst explosivo
             this.spawnPhonkBurst(playerPos);
         } else if (station === StationId.SAMBA) {
-            // Câmera: Nudge lateral + hesitação no lerp
-            this.cameraSystem.positionalOffset.set(2, 0, 0); 
-            this.cameraSystem.lerpSpeed = 1.0; 
-            // Partículas: Inicia o rastro prolongado
-            this.activeSpawners.push({ type: StationId.SAMBA, timer: 1.0 });
+            // Câmera: Nudge muito mais agressivo
+            this.cameraSystem.positionalOffset.set(5, 0, 0); 
+            this.cameraSystem.lerpSpeed = 0.5; // Cai drasticamente a velocidade (hesitação forte)
+            
+            // Partícula: Confete/Serpentina
+            this.spawnSambaConfetti(playerPos);
         } else if (station === StationId.FORRO) {
-            // Câmera: Rotação orbital
-            this.cameraSystem.angularOffset = Math.PI / 8; // Gira ~22.5 graus
-            // Partículas: Inicia rastro circular
+            // Câmera: Rotação orbital intensa + Zoom-in
+            this.cameraSystem.angularOffset = Math.PI / 3; // Giro de 60 graus
+            this.cameraSystem.positionalOffset.set(0, -1, -3); // Zoom (avança no Z, desce no Y)
+            
+            // Partícula de troca (mantido)
             this.activeSpawners.push({ type: StationId.FORRO, timer: 1.0 });
         }
     }
 
-    public update(unscaledDelta: number, playerPos: THREE.Vector3) {
-        // Usamos unscaledDelta para que a câmera lenta do jogo não afete o "Juice" da UI/Câmera
+    public update(unscaledDelta: number, playerPos: THREE.Vector3, currentStation: StationId | null) {
         this.updateCameraEffects(unscaledDelta);
         this.updateSpawners(unscaledDelta, playerPos);
         this.updateParticles(unscaledDelta);
+        this.updateConfetti(unscaledDelta);
+        this.updateContinuousAura(unscaledDelta, playerPos, currentStation);
     }
 
     private updateCameraEffects(delta: number) {
@@ -62,7 +72,6 @@ export class EffectsManager {
         this.cameraTimer += delta;
 
         if (this.activeCameraEffect === StationId.PHONK) {
-            // Retorna o FOV suavemente ao normal
             this.cameraSystem.camera.fov = THREE.MathUtils.lerp(this.cameraSystem.camera.fov, this.cameraSystem.baseFov, 15 * delta);
             this.cameraSystem.camera.updateProjectionMatrix();
             if (this.cameraTimer > 0.15) {
@@ -71,17 +80,24 @@ export class EffectsManager {
                 this.activeCameraEffect = null;
             }
         } else if (this.activeCameraEffect === StationId.SAMBA) {
-            // Retorna o Nudge para zero
-            this.cameraSystem.positionalOffset.lerp(new THREE.Vector3(0, 0, 0), 10 * delta);
-            if (this.cameraTimer > 0.1) {
-                this.cameraSystem.lerpSpeed = 5; // Restaura a velocidade de rastreamento
-                if (this.cameraTimer > 0.3) this.activeCameraEffect = null;
+            // Suaviza o retorno do Nudge
+            this.cameraSystem.positionalOffset.lerp(new THREE.Vector3(0, 0, 0), 8 * delta);
+            
+            // Estende a duração da queda de velocidade do lerp (agora para ~200ms+)
+            if (this.cameraTimer > 0.2) {
+                this.cameraSystem.lerpSpeed = THREE.MathUtils.lerp(this.cameraSystem.lerpSpeed, 5, 8 * delta);
+                if (this.cameraTimer > 0.6) {
+                    this.cameraSystem.lerpSpeed = 5;
+                    this.activeCameraEffect = null;
+                }
             }
         } else if (this.activeCameraEffect === StationId.FORRO) {
-            // Retorna a rotação orbital para zero
-            this.cameraSystem.angularOffset = THREE.MathUtils.lerp(this.cameraSystem.angularOffset, 0, 8 * delta);
-            if (this.cameraTimer > 0.3) {
+            // Retorna rotação e zoom pro normal
+            this.cameraSystem.angularOffset = THREE.MathUtils.lerp(this.cameraSystem.angularOffset, 0, 6 * delta);
+            this.cameraSystem.positionalOffset.lerp(new THREE.Vector3(0, 0, 0), 6 * delta);
+            if (this.cameraTimer > 0.5) {
                 this.cameraSystem.angularOffset = 0;
+                this.cameraSystem.positionalOffset.set(0, 0, 0);
                 this.activeCameraEffect = null;
             }
         }
@@ -98,7 +114,6 @@ export class EffectsManager {
             positions[i * 3 + 1] = pos.y + 0.5;
             positions[i * 3 + 2] = pos.z;
 
-            // Velocidade radial aleatória
             const v = new THREE.Vector3(
                 (Math.random() - 0.5) * 2,
                 (Math.random() - 0.5) * 2,
@@ -115,14 +130,57 @@ export class EffectsManager {
         this.particleSystems.push({ mesh, velocities, life: 0, maxLife: 0.4 });
     }
 
+    private spawnSambaConfetti(pos: THREE.Vector3) {
+        const count = 35; // Quantidade solta para não ficar densa demais
+        const group = new THREE.Group();
+        group.position.copy(pos);
+        group.position.y += 1.0; 
+
+        // Paleta festiva (maioria dourado, alguns brancos/cremes)
+        const colors = [0xFFD700, 0xFFD700, 0xFFFFFF, 0xFFF8DC, 0xFFD700];
+        const meshes: { mesh: THREE.Mesh, vel: THREE.Vector3, rot: THREE.Vector3 }[] = [];
+
+        // Geometria alongada simulando pedaços de fita/serpentina
+        const geometry = new THREE.PlaneGeometry(0.05, 0.25); 
+
+        for (let i = 0; i < count; i++) {
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(geometry, material);
+
+            mesh.position.set(
+                (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 0.5,
+                (Math.random() - 0.5) * 0.5
+            );
+
+            // Explosão radial, com prioridade vertical inicial
+            const vel = new THREE.Vector3(
+                (Math.random() - 0.5) * 6,
+                Math.random() * 5 + 3,
+                (Math.random() - 0.5) * 6
+            );
+
+            const rot = new THREE.Vector3(
+                Math.random() * 10 - 5,
+                Math.random() * 10 - 5,
+                Math.random() * 10 - 5
+            );
+
+            group.add(mesh);
+            meshes.push({ mesh, vel, rot });
+        }
+
+        this.scene.add(group);
+        this.confettiSystems.push({ group, meshes, life: 0, maxLife: 1.0 }); // Duração festiva estendida
+    }
+
     private updateSpawners(delta: number, playerPos: THREE.Vector3) {
         for (let i = this.activeSpawners.length - 1; i >= 0; i--) {
             const spawner = this.activeSpawners[i];
             spawner.timer -= delta;
 
-            if (spawner.type === StationId.SAMBA) {
-                this.spawnTrailPoint(playerPos, 0xFFD700, 0.6, false);
-            } else if (spawner.type === StationId.FORRO) {
+            if (spawner.type === StationId.FORRO) {
                 this.spawnTrailPoint(playerPos, 0xFF7F27, 0.8, true);
             }
 
@@ -137,13 +195,9 @@ export class EffectsManager {
         const offset = new THREE.Vector3();
         
         if (isCircular) {
-            // Forró: Posição circular ao redor do personagem
             const angle = Math.random() * Math.PI * 2;
             const radius = 1.8;
             offset.set(Math.cos(angle) * radius, (Math.random() - 0.5) + 0.5, Math.sin(angle) * radius);
-        } else {
-            // Samba: Rastro espalhado na base e rastro principal
-            offset.set((Math.random() - 0.5), Math.random() * 1.5, (Math.random() - 0.5));
         }
 
         const finalPos = pos.clone().add(offset);
@@ -161,7 +215,6 @@ export class EffectsManager {
             const ps = this.particleSystems[i];
             ps.life += delta;
 
-            // Se for o burst do Phonk, aplica a velocidade
             if (ps.velocities) {
                 const positions = ps.mesh.geometry.attributes.position.array as Float32Array;
                 for (let j = 0; j < ps.velocities.length; j++) {
@@ -172,7 +225,6 @@ export class EffectsManager {
                 ps.mesh.geometry.attributes.position.needsUpdate = true;
             }
 
-            // Faz o fade-out baseado no tempo de vida
             const material = ps.mesh.material as THREE.PointsMaterial;
             const progress = ps.life / ps.maxLife;
             material.opacity = 1 - progress;
@@ -184,5 +236,148 @@ export class EffectsManager {
                 this.particleSystems.splice(i, 1);
             }
         }
+    }
+
+    private updateConfetti(delta: number) {
+        for (let i = this.confettiSystems.length - 1; i >= 0; i--) {
+            const sys = this.confettiSystems[i];
+            sys.life += delta;
+            const progress = sys.life / sys.maxLife;
+
+            for (let c of sys.meshes) {
+                // Gravidade
+                c.vel.y -= delta * 8.0; 
+                // Atrito forte lateral (simula papel caindo em zigue-zague)
+                c.vel.x *= 0.95; 
+                c.vel.z *= 0.95;
+
+                c.mesh.position.addScaledVector(c.vel, delta);
+                
+                // Rotação turbulenta no ar
+                c.mesh.rotation.x += c.rot.x * delta;
+                c.mesh.rotation.y += c.rot.y * delta;
+                c.mesh.rotation.z += c.rot.z * delta;
+
+                // Fade-out limpo no final
+                const mat = c.mesh.material as THREE.MeshBasicMaterial;
+                if (progress > 0.7) {
+                    mat.transparent = true;
+                    mat.opacity = 1 - ((progress - 0.7) / 0.3);
+                }
+            }
+
+            if (sys.life >= sys.maxLife) {
+                this.scene.remove(sys.group);
+                for (let c of sys.meshes) {
+                    c.mesh.geometry.dispose();
+                    (c.mesh.material as THREE.Material).dispose();
+                }
+                this.confettiSystems.splice(i, 1);
+            }
+        }
+    }
+
+    private updateContinuousAura(delta: number, playerPos: THREE.Vector3, currentStation: StationId | null) {
+        if (!currentStation) return;
+
+        this.auraTimer += delta;
+        
+        // Taxas de spawn ditam a densidade da aura
+        const spawnRates = {
+            [StationId.PHONK]: 0.02, // 50/s (Intenso e denso)
+            [StationId.SAMBA]: 0.1,  // 10/s (Poucas, soltas)
+            [StationId.FORRO]: 0.04  // 25/s (Visível, circular)
+        };
+
+        if (this.auraTimer > spawnRates[currentStation]) {
+            this.auraTimer = 0;
+            this.spawnAuraParticle(currentStation, playerPos);
+        }
+
+        // Move a aura atrelada matematicamente ao centro do jogador
+        for (let i = this.auraParticles.length - 1; i >= 0; i--) {
+            const p = this.auraParticles[i];
+            p.life += delta;
+
+            if (p.type === StationId.PHONK) {
+                // Pulsação agressiva para fora e para cima
+                p.radius += delta * 1.5; 
+                p.baseY += delta * 2.0; 
+                const x = playerPos.x + Math.cos(p.angle) * p.radius;
+                const z = playerPos.z + Math.sin(p.angle) * p.radius;
+                // Jitter garante visual "instável/nervoso"
+                const jitterX = (Math.random() - 0.5) * 0.1;
+                const jitterZ = (Math.random() - 0.5) * 0.1;
+                p.mesh.position.set(x + jitterX, playerPos.y + p.baseY, z + jitterZ);
+            } 
+            else if (p.type === StationId.SAMBA) {
+                // Sinuosa (senoide), serpenteia para cima
+                p.baseY += delta * 1.0; 
+                const osc = Math.sin(p.life * Math.PI * 3) * 0.4; 
+                const currentRadius = p.radius + osc;
+                const x = playerPos.x + Math.cos(p.angle) * currentRadius;
+                const z = playerPos.z + Math.sin(p.angle) * currentRadius;
+                p.mesh.position.set(x, playerPos.y + p.baseY, z);
+            } 
+            else if (p.type === StationId.FORRO) {
+                // Espiral rodopiante contínua
+                p.angle += delta * 8.0; 
+                p.baseY += delta * 1.2; 
+                const currentRadius = p.radius + Math.sin(p.life * 15) * 0.1; // Oscilação leve
+                const x = playerPos.x + Math.cos(p.angle) * currentRadius;
+                const z = playerPos.z + Math.sin(p.angle) * currentRadius;
+                p.mesh.position.set(x, playerPos.y + p.baseY, z);
+            }
+
+            const material = p.mesh.material as THREE.PointsMaterial;
+            material.opacity = 1 - (p.life / p.maxLife);
+
+            if (p.life >= p.maxLife) {
+                this.scene.remove(p.mesh);
+                p.mesh.geometry.dispose();
+                material.dispose();
+                this.auraParticles.splice(i, 1);
+            }
+        }
+    }
+
+    private spawnAuraParticle(station: StationId, pos: THREE.Vector3) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
+        
+        let color = 0xffffff;
+        let size = 0.1;
+        let maxLife = 0.5;
+        let radius = 0.5;
+        let angle = Math.random() * Math.PI * 2;
+        let baseY = Math.random() * 1.0;
+
+        if (station === StationId.PHONK) {
+            color = 0x39FF14; 
+            size = 0.15;
+            maxLife = 0.3; 
+            radius = 0.4 + Math.random() * 0.2; 
+        } else if (station === StationId.SAMBA) {
+            color = 0xFFD700; 
+            size = 0.12;
+            maxLife = 1.0; 
+            radius = 0.6 + Math.random() * 0.4;
+        } else if (station === StationId.FORRO) {
+            color = 0xFF7F27; 
+            size = 0.12;
+            maxLife = 0.6;
+            radius = 0.8 + Math.random() * 0.3; 
+        }
+
+        const material = new THREE.PointsMaterial({ color, size, transparent: true, opacity: 1 });
+        const mesh = new THREE.Points(geometry, material);
+        
+        // O valor agora é lido e a partícula já nasce no lugar certo!
+        mesh.position.copy(pos);
+        
+        this.scene.add(mesh);
+        this.auraParticles.push({
+            mesh, life: 0, maxLife, type: station, angle, radius, baseY
+        });
     }
 }

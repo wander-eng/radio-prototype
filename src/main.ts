@@ -90,7 +90,8 @@ function animate() {
     
     cameraSystem.update(player.mesh.position, delta);
     
-    effectsManager.update(unscaledDelta, player.mesh.position);
+    // NOVO: Passamos a currentStation para o EffectsManager desenhar a Aura constantemente
+    effectsManager.update(unscaledDelta, player.mesh.position, radioSystem.currentStation);
     
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
 }
