@@ -7,6 +7,7 @@ import { Target } from './target';
 import { InputManager } from './input';
 import { AudioManager } from './audio';
 import { RadioSystem, StationId } from './radio';
+import { EffectsManager } from './effects';
 
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
@@ -23,7 +24,6 @@ window.addEventListener('resize', () => {
 const player = new Player();
 gameScene.scene.add(player.mesh);
 
-// Adicionado um 3º Alvo para facilitar o teste da diferença de raio/AoE do Forró
 const targets: Target[] = [
     new Target(new THREE.Vector3(-3, 0, -5)),
     new Target(new THREE.Vector3(-1.5, 0, -4.5)), 
@@ -31,8 +31,10 @@ const targets: Target[] = [
 ];
 targets.forEach(t => gameScene.scene.add(t.mesh));
 
+// --- 3. INICIALIZA SISTEMA DE RÁDIO E EFEITOS ---
 const audioManager = new AudioManager();
-const radioSystem = new RadioSystem(player, gameScene, audioManager);
+const effectsManager = new EffectsManager(gameScene.scene, cameraSystem);
+const radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
 
 let gameStarted = false;
 
@@ -57,21 +59,24 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Digit3') radioSystem.setStation(StationId.FORRO);
 });
 
-// --- GERENCIAMENTO DE TEMPO ---
 let timeScale = 1.0;
 let slowMoTimer = 0;
 
 const setTimeScale = (scale: number, unscaledDuration: number) => {
     timeScale = scale;
-    slowMoTimer = unscaledDuration; // Tempo real (unscaled) de duração do evento
+    slowMoTimer = unscaledDuration; 
 };
 
-const clock = new THREE.Clock();
+// --- 4. GAME LOOP ---
+// Chame direto do THREE, sem precisar importar nada novo!
+const timer = new THREE.Timer();
 
 function animate() {
     requestAnimationFrame(animate);
     
-    const unscaledDelta = clock.getDelta();
+    // O Timer exige que seu estado seja atualizado manualmente a cada frame
+    timer.update();
+    const unscaledDelta = timer.getDelta();
     
     if (slowMoTimer > 0) {
         slowMoTimer -= unscaledDelta;
@@ -80,11 +85,13 @@ function animate() {
 
     const delta = unscaledDelta * timeScale;
 
-    // Removemos o unscaledDelta da chamada abaixo
     player.update(delta, input, cameraSystem.camera, targets, radioSystem.currentStation, setTimeScale);
-    
     targets.forEach(t => t.update(delta));
+    
     cameraSystem.update(player.mesh.position, delta);
+    
+    effectsManager.update(unscaledDelta, player.mesh.position);
+    
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
 }
 

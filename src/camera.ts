@@ -2,22 +2,34 @@ import * as THREE from 'three';
 
 export class FollowCamera {
     public camera: THREE.PerspectiveCamera;
-    private offset: THREE.Vector3;
+    
+    // Parâmetros base da câmera
+    public baseOffset: THREE.Vector3;
+    public baseFov = 75;
+    
+    // Parâmetros manipuláveis temporariamente pelos Efeitos Visuais
+    public lerpSpeed = 5;
+    public positionalOffset = new THREE.Vector3();
+    public angularOffset = 0;
 
     constructor() {
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Posição: 4 unidades acima, 8 unidades para trás do alvo
-        this.offset = new THREE.Vector3(0, 4, 8);
+        this.camera = new THREE.PerspectiveCamera(this.baseFov, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.baseOffset = new THREE.Vector3(0, 4, 8);
     }
 
     public update(targetPosition: THREE.Vector3, delta: number) {
-        // Calcula a posição ideal da câmera
-        const idealPosition = targetPosition.clone().add(this.offset);
+        // 1. Aplica o Offset Orbital do Forró
+        const currentOffset = this.baseOffset.clone();
+        if (this.angularOffset !== 0) {
+            currentOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.angularOffset);
+        }
+
+        // 2. Aplica o Nudge (empurrão) lateral do Samba e calcula a posição ideal
+        const idealPosition = targetPosition.clone().add(currentOffset).add(this.positionalOffset);
         
-        // Interpolação suave em direção à posição ideal (lerp)
-        this.camera.position.lerp(idealPosition, 5 * delta);
+        // 3. Move a câmera com a velocidade dinâmica (que o Samba pode alterar temporariamente)
+        this.camera.position.lerp(idealPosition, this.lerpSpeed * delta);
         
-        // Olha levemente acima do centro do jogador
         const lookAtPosition = targetPosition.clone().add(new THREE.Vector3(0, 1, 0));
         this.camera.lookAt(lookAtPosition);
     }
