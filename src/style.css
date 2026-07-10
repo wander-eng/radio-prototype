@@ -101,3 +101,44 @@ body, html {
   background: #ff3333;
   transition: width 0.1s linear;
 }
+
+/* --- HUD CONTROLES (Canto Superior Direito) --- */
+.hud-top-right {
+  position: absolute;
+  top: 30px;
+  right: 30px;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  line-height: 2.0;
+  text-shadow: 1px 1px 0px #000;
+  pointer-events: none;
+}
+
+.hud-controls-title {
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.hud-controls-hint kbd {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: bold;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  background-color: #000;
+  cursor: crosshair; /* NOVO: Muda o mouse para uma mira em formato de cruz! */
+}

@@ -22,7 +22,6 @@ window.addEventListener('resize', () => {
     cameraSystem.camera.updateProjectionMatrix();
 });
 
-// Inicializa UI e Player interligados
 const hudManager = new UIManager();
 const player = new Player(hudManager);
 gameScene.scene.add(player.mesh);
@@ -47,18 +46,39 @@ const startGame = async () => {
     await audioManager.init();
     await audioManager.loadAll();
     
-    radioSystem.setStation(StationId.SAMBA, true);
+    radioSystem.setStation(StationId.FORRO, true);
 };
 
 window.addEventListener('keydown', startGame, { once: true });
-window.addEventListener('click', startGame, { once: true });
+window.addEventListener('mousedown', startGame, { once: true }); // Tira a tela do estado pausado com o mouse também
 
+// Troca Direta (Teclado)
 window.addEventListener('keydown', (e) => {
     if (!gameStarted) return; 
     
     if (e.code === 'Digit1') radioSystem.setStation(StationId.PHONK);
     if (e.code === 'Digit2') radioSystem.setStation(StationId.SAMBA);
     if (e.code === 'Digit3') radioSystem.setStation(StationId.FORRO);
+});
+
+// Troca Sequencial (Scroll do Mouse)
+window.addEventListener('wheel', (e) => {
+    if (!gameStarted || !radioSystem.currentStation) return;
+    
+    const stations = [StationId.PHONK, StationId.SAMBA, StationId.FORRO];
+    const currentIndex = stations.indexOf(radioSystem.currentStation);
+    
+    let nextIndex = currentIndex;
+    
+    if (e.deltaY > 0) {
+        // Scroll pra baixo: Avança
+        nextIndex = (currentIndex + 1) % stations.length;
+    } else if (e.deltaY < 0) {
+        // Scroll pra cima: Retorna
+        nextIndex = (currentIndex - 1 + stations.length) % stations.length;
+    }
+    
+    radioSystem.setStation(stations[nextIndex]);
 });
 
 let timeScale = 1.0;
@@ -85,12 +105,9 @@ function animate() {
     const delta = unscaledDelta * timeScale;
 
     player.update(delta, input, cameraSystem.camera, targets, radioSystem.currentStation, setTimeScale);
-    
-    // Alvos agora necessitam conhecer a câmera para fazer a projeção 2D da tela
     targets.forEach(t => t.update(delta, cameraSystem.camera));
     
     cameraSystem.update(player.mesh.position, delta);
-    
     effectsManager.update(unscaledDelta, player.mesh.position, radioSystem.currentStation);
     
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);

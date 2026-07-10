@@ -33,11 +33,25 @@ export class UIManager {
         topLeft.appendChild(this.comboText);
         topLeft.appendChild(hpBg);
 
+        // NOVO: Container superior direito (Controles)
+        const topRight = document.createElement('div');
+        topRight.className = 'hud-top-right';
+        topRight.innerHTML = `
+            <div class="hud-controls-title">CONTROLES</div>
+            <div class="hud-controls-hint">
+                Mover: <kbd>WASD</kbd> ou <kbd>Setas</kbd><br>
+                Ataque: <kbd>Espaço</kbd> ou <kbd>LMB</kbd><br>
+                Dash: <kbd>Shift</kbd> ou <kbd>RMB</kbd><br>
+                Rádio: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> ou <kbd>Scroll</kbd>
+            </div>
+        `;
+
         // Popup central
         this.popupText = document.createElement('div');
         this.popupText.className = 'hud-popup';
 
         this.container.appendChild(topLeft);
+        this.container.appendChild(topRight);
         this.container.appendChild(this.popupText);
         document.body.appendChild(this.container);
     }
@@ -52,7 +66,6 @@ export class UIManager {
     public updateCombo(combo: number) {
         if (combo > 0) {
             this.comboText.innerText = `${combo} HITS`;
-            // Efeito de "soco" no texto do combo
             this.comboText.style.transform = 'scale(1.2)';
             setTimeout(() => this.comboText.style.transform = 'scale(1)', 50);
         } else {
@@ -67,13 +80,11 @@ export class UIManager {
 
         if (this.popupTimeout) clearTimeout(this.popupTimeout);
         
-        // Some sozinho após ~1.2s
         this.popupTimeout = window.setTimeout(() => {
             this.popupText.classList.remove('show');
         }, 1200);
     }
 
-    // Scaffolding do HP do Jogador
     public updatePlayerHP(current: number, max: number) {
         const percentage = Math.max(0, (current / max) * 100);
         this.playerHpFill.style.width = `${percentage}%`;

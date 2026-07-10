@@ -12,7 +12,6 @@ export class Player {
     private baseDamage = 10;
     private baseRange = 1.5;
 
-    // Scaffolding de Player HP
     public maxHp = 100;
     public hp = 100;
 
@@ -31,7 +30,7 @@ export class Player {
 
     private phonkCombo = 0;
     private globalCombo = 0;
-    private phonkMaxTriggered = false; // Flag para não flodar o popup
+    private phonkMaxTriggered = false; 
     private invulnerableTimer = 0; 
 
     constructor(hud: UIManager) {
@@ -61,14 +60,12 @@ export class Player {
     ) {
         if (!currentStation) return;
 
-        // Reset ao trocar de Rádio
         if (this.lastStation !== currentStation) {
             this.phonkCombo = 0;
             this.globalCombo = 0;
             this.phonkMaxTriggered = false;
             this.hud.updateCombo(0);
             
-            // Atualiza a UI Visual
             if (currentStation === StationId.PHONK) this.hud.setStation('PHONK', '#39FF14');
             if (currentStation === StationId.SAMBA) this.hud.setStation('SAMBA', '#FFD700');
             if (currentStation === StationId.FORRO) this.hud.setStation('FORRÓ', '#FF7F27');
@@ -81,7 +78,6 @@ export class Player {
         this.timeSinceLastDash += delta;
         this.timeSinceLastHit += delta;
 
-        // Reset do combo por Ociosidade (2s)
         if (this.timeSinceLastHit > 2.0 && this.globalCombo > 0) {
             this.globalCombo = 0;
             this.phonkCombo = 0;
@@ -92,11 +88,34 @@ export class Player {
         this.handleDash(delta, input, camera, currentStation, targets, setTimeScale);
         this.updateAttackState(delta, input, camera, currentStation, targets);
         
-        if (!this.isDashing && input.isPressed('Space')) {
-            this.tryAttack(currentStation);
+        const wantsToAttack = input.isPressed('Space') || input.isPressed('MouseLeft');
+        if (!this.isDashing && wantsToAttack) {
+            this.tryAttack(currentStation, input, camera); // Agora envia o mouse para a função de ataque
         }
 
         this.handleMovement(delta, input, camera, currentStation);
+    }
+
+    // --- NOVO: Função de Mira por Raycast (Traduz o mouse para o mundo 3D) ---
+    private getMouseDirection(input: InputManager, camera: THREE.Camera): THREE.Vector3 {
+        const raycaster = new THREE.Raycaster();
+        const mousePos = new THREE.Vector2(input.mousePosition.x, input.mousePosition.y);
+        raycaster.setFromCamera(mousePos, camera);
+
+        // Cria um chão matemático (Plane) exato na altura do jogador para receber a mira
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.mesh.position.y);
+        const targetPoint = new THREE.Vector3();
+
+        raycaster.ray.intersectPlane(plane, targetPoint);
+
+        if (targetPoint) {
+            const dir = targetPoint.sub(this.mesh.position);
+            dir.y = 0; // Trava o eixo Y para o boneco não tentar "olhar para cima/baixo"
+            if (dir.lengthSq() > 0) return dir.normalize();
+        }
+
+        // Fallback caso o raycast falhe
+        return new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
     }
 
     private handleDash(delta: number, input: InputManager, camera: THREE.Camera, station: StationId, targets: Target[], setTimeScale: (scale: number, duration: number) => void) {
@@ -104,6 +123,7 @@ export class Player {
             this.dashTimer -= delta;
             let speedMult = 3; 
             if (station === StationId.FORRO) {
+                // O Dash em arco do Forró continua seguindo o teclado para permitir "kiting" defensivo
                 const inputDir = this.getMovementDirection(input, camera);
                 if (inputDir.lengthSq() > 0) {
                     this.dashDirection.lerp(inputDir, 10 * delta).normalize();
@@ -117,7 +137,7 @@ export class Player {
             return; 
         }
 
-        const wantsToDash = input.isPressed('ShiftLeft') || input.isPressed('ShiftRight');
+        const wantsToDash = input.isPressed('ShiftLeft') || input.isPressed('ShiftRight') || input.isPressed('MouseRight');
         
         if (wantsToDash && this.dashCooldown <= 0) {
             let canDash = (this.attackState === 'idle');
@@ -151,14 +171,13 @@ export class Player {
 
         if (this.attackState === 'windup') {
             if (station === StationId.FORRO) {
-                const inputDir = this.getMovementDirection(input, camera);
-                if (inputDir.lengthSq() > 0) {
-                    const targetRotation = Math.atan2(inputDir.x, inputDir.z);
-                    const currentRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.mesh.rotation.y, 0));
-                    const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetRotation, 0));
-                    currentRot.slerp(targetQuat, 10 * delta);
-                    this.mesh.rotation.y = new THREE.Euler().setFromQuaternion(currentRot).y;
-                }
+                // NOVO: O ataque contínuo do Forró agora persegue o MOUSE (Mira fluida)
+                const mouseDir = this.getMouseDirection(input, camera);
+                const targetRotation = Math.atan2(mouseDir.x, mouseDir.z);
+                const currentRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.mesh.rotation.y, 0));
+                const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetRotation, 0));
+                currentRot.slerp(targetQuat, 10 * delta);
+                this.mesh.rotation.y = new THREE.Euler().setFromQuaternion(currentRot).y;
             }
 
             if (this.attackStateTimer <= 0) {
@@ -171,8 +190,15 @@ export class Player {
         }
     }
 
-    private tryAttack(station: StationId) {
+    private tryAttack(station: StationId, input: InputManager, camera: THREE.Camera) {
+        // NOVO: Helper que gira o personagem pro mouse exatamente na hora que o golpe inicia
+        const snapToMouse = () => {
+            const mouseDir = this.getMouseDirection(input, camera);
+            this.mesh.rotation.y = Math.atan2(mouseDir.x, mouseDir.z);
+        };
+
         if (this.attackState === 'idle') {
+            snapToMouse();
             this.startAttack();
             return;
         }
@@ -186,7 +212,10 @@ export class Player {
             if (station === StationId.SAMBA && timeInRecovery <= 0.25) canCombo = true;
             if (station === StationId.FORRO) canCombo = true;
 
-            if (canCombo) this.startAttack();
+            if (canCombo) {
+                snapToMouse();
+                this.startAttack();
+            }
         }
     }
 
@@ -203,9 +232,26 @@ export class Player {
 
         const playerForward = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
         const attackOrigin = this.mesh.position.clone();
-        const hitCenter = attackOrigin.add(playerForward.clone().multiplyScalar(range));
+        
+        // Ponto de impacto na ponta do alcance
+        const hitCenter = attackOrigin.clone().add(playerForward.clone().multiplyScalar(range));
+        
+        // NOVO: Ponto intermediário para eliminar o "ponto cego" de perto do Forró
+        const midPoint = attackOrigin.clone().add(playerForward.clone().multiplyScalar(range * 0.5));
 
-        const hits = targets.filter(t => t.state === 'active' && t.mesh.position.distanceTo(hitCenter) <= 1.5);
+        const hits = targets.filter(t => {
+            if (t.state !== 'active') return false;
+            
+            const distToCenter = t.mesh.position.distanceTo(hitCenter);
+            
+            // Regra Forró: Verifica se o inimigo está na ponta OU no meio do caminho
+            if (station === StationId.FORRO) {
+                const distToMid = t.mesh.position.distanceTo(midPoint);
+                return distToCenter <= 1.5 || distToMid <= 1.5;
+            }
+            
+            return distToCenter <= 1.5;
+        });
 
         if (hits.length > 0) {
             if (station !== StationId.FORRO) {
@@ -213,12 +259,10 @@ export class Player {
                 hits.length = 1;
             }
 
-            // Payoff Forró: Dano em Área
             if (station === StationId.FORRO && hits.length >= 2) {
                 this.hud.showPopup("ATAQUE EM ÁREA!", "#FF7F27");
             }
 
-            // Incrementa Contador Global
             this.globalCombo += hits.length;
             this.hud.updateCombo(this.globalCombo);
 
@@ -231,7 +275,7 @@ export class Player {
                 
                 if (station === StationId.SAMBA && this.timeSinceLastDash <= 1.0) {
                     finalDamage *= 1.5;
-                    this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700"); // Payoff Samba
+                    this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700");
                 }
 
                 t.hit(playerForward, finalDamage);
@@ -241,7 +285,6 @@ export class Player {
             
             if (station === StationId.PHONK) {
                 this.phonkCombo++;
-                // Payoff Phonk: Teto de dano (+30%) atingido aos 6 hits
                 if (this.phonkCombo >= 6 && !this.phonkMaxTriggered) {
                     this.hud.showPopup("DANO MÁXIMO!", "#39FF14");
                     this.phonkMaxTriggered = true;
@@ -280,7 +323,10 @@ export class Player {
 
         if (moveDir.lengthSq() > 0) {
             this.mesh.position.add(moveDir.multiplyScalar(currentSpeed * delta));
-            this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+            // A rotação de movimento agora cede prioridade para a rotação de ataque quando necessário
+            if (this.attackState === 'idle') {
+                this.mesh.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+            }
         }
     }
 
@@ -293,10 +339,10 @@ export class Player {
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-        if (input.isPressed('KeyW')) moveDir.add(forward);
-        if (input.isPressed('KeyS')) moveDir.sub(forward);
-        if (input.isPressed('KeyA')) moveDir.sub(right);
-        if (input.isPressed('KeyD')) moveDir.add(right);
+        if (input.isPressed('KeyW') || input.isPressed('ArrowUp')) moveDir.add(forward);
+        if (input.isPressed('KeyS') || input.isPressed('ArrowDown')) moveDir.sub(forward);
+        if (input.isPressed('KeyA') || input.isPressed('ArrowLeft')) moveDir.sub(right);
+        if (input.isPressed('KeyD') || input.isPressed('ArrowRight')) moveDir.add(right);
 
         if (moveDir.lengthSq() > 0) moveDir.normalize();
         return moveDir;
