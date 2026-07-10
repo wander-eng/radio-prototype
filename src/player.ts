@@ -2,13 +2,19 @@ import * as THREE from 'three';
 import { InputManager } from './input';
 import { Target } from './target';
 import { StationId } from './radio';
+import type { UIManager } from './hud';
 
 export class Player {
     public mesh: THREE.Mesh;
+    private hud: UIManager;
     
     private baseSpeed = 6;
     private baseDamage = 10;
     private baseRange = 1.5;
+
+    // Scaffolding de Player HP
+    public maxHp = 100;
+    public hp = 100;
 
     private lastStation: StationId | null = null;
     
@@ -24,9 +30,14 @@ export class Player {
     private timeSinceLastHit = 999;
 
     private phonkCombo = 0;
+    private globalCombo = 0;
+    private phonkMaxTriggered = false; // Flag para não flodar o popup
     private invulnerableTimer = 0; 
 
-    constructor() {
+    constructor(hud: UIManager) {
+        this.hud = hud;
+        this.hud.updatePlayerHP(this.hp, this.maxHp);
+
         const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 16);
         const material = new THREE.MeshStandardMaterial({ color: 0x0055ff }); 
         this.mesh = new THREE.Mesh(geometry, material);
@@ -50,10 +61,19 @@ export class Player {
     ) {
         if (!currentStation) return;
 
+        // Reset ao trocar de Rádio
         if (this.lastStation !== currentStation) {
             this.phonkCombo = 0;
+            this.globalCombo = 0;
+            this.phonkMaxTriggered = false;
+            this.hud.updateCombo(0);
+            
+            // Atualiza a UI Visual
+            if (currentStation === StationId.PHONK) this.hud.setStation('PHONK', '#39FF14');
+            if (currentStation === StationId.SAMBA) this.hud.setStation('SAMBA', '#FFD700');
+            if (currentStation === StationId.FORRO) this.hud.setStation('FORRÓ', '#FF7F27');
+
             this.lastStation = currentStation;
-            console.log(`[RÁDIO] Sintonizado na estação: ${currentStation}`);
         }
 
         if (this.dashCooldown > 0) this.dashCooldown -= delta;
@@ -61,10 +81,12 @@ export class Player {
         this.timeSinceLastDash += delta;
         this.timeSinceLastHit += delta;
 
-        // Phonk: loga a perda de combo por tempo ocioso
-        if (currentStation === StationId.PHONK && this.timeSinceLastHit > 2.0 && this.phonkCombo > 0) {
-            console.log(`[PHONK] Muito tempo sem bater! Combo resetado.`);
+        // Reset do combo por Ociosidade (2s)
+        if (this.timeSinceLastHit > 2.0 && this.globalCombo > 0) {
+            this.globalCombo = 0;
             this.phonkCombo = 0;
+            this.phonkMaxTriggered = false;
+            this.hud.updateCombo(0);
         }
 
         this.handleDash(delta, input, camera, currentStation, targets, setTimeScale);
@@ -77,18 +99,10 @@ export class Player {
         this.handleMovement(delta, input, camera, currentStation);
     }
 
-    private handleDash(
-        delta: number, 
-        input: InputManager, 
-        camera: THREE.Camera, 
-        station: StationId, 
-        targets: Target[], 
-        setTimeScale: (scale: number, duration: number) => void
-    ) {
+    private handleDash(delta: number, input: InputManager, camera: THREE.Camera, station: StationId, targets: Target[], setTimeScale: (scale: number, duration: number) => void) {
         if (this.isDashing) {
             this.dashTimer -= delta;
             let speedMult = 3; 
-            
             if (station === StationId.FORRO) {
                 const inputDir = this.getMovementDirection(input, camera);
                 if (inputDir.lengthSq() > 0) {
@@ -99,10 +113,7 @@ export class Player {
 
             this.mesh.position.add(this.dashDirection.clone().multiplyScalar(this.baseSpeed * speedMult * delta));
             this.mesh.rotation.y = Math.atan2(this.dashDirection.x, this.dashDirection.z);
-
-            if (this.dashTimer <= 0) {
-                this.isDashing = false;
-            }
+            if (this.dashTimer <= 0) this.isDashing = false;
             return; 
         }
 
@@ -110,7 +121,6 @@ export class Player {
         
         if (wantsToDash && this.dashCooldown <= 0) {
             let canDash = (this.attackState === 'idle');
-            
             if (station === StationId.PHONK) canDash = true;
 
             if (canDash) {
@@ -125,16 +135,11 @@ export class Player {
                     this.dashDirection.set(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
                 }
 
-                if (station === StationId.PHONK && this.attackState !== 'idle') {
-                    console.log(`[PHONK] Animação de ataque cancelada pelo Dash!`);
-                }
-
                 this.attackState = 'idle';
 
                 if (station === StationId.SAMBA) {
                     this.invulnerableTimer = 0.2;
                     setTimeScale(0.5, 0.15);
-                    console.log(`[SAMBA] Dash! Invulnerabilidade e Câmera Lenta ativados.`);
                 }
             }
         }
@@ -142,7 +147,6 @@ export class Player {
 
     private updateAttackState(delta: number, input: InputManager, camera: THREE.Camera, station: StationId, targets: Target[]) {
         if (this.attackState === 'idle') return;
-
         this.attackStateTimer -= delta;
 
         if (this.attackState === 'windup') {
@@ -160,13 +164,10 @@ export class Player {
             if (this.attackStateTimer <= 0) {
                 this.executeHitbox(station, targets);
                 this.attackState = 'recovery';
-                this.attackStateTimer = 0.3; 
-                if (station === StationId.FORRO) this.attackStateTimer = 0.6; 
+                this.attackStateTimer = station === StationId.FORRO ? 0.6 : 0.3; 
             }
         } else if (this.attackState === 'recovery') {
-            if (this.attackStateTimer <= 0) {
-                this.attackState = 'idle';
-            }
+            if (this.attackStateTimer <= 0) this.attackState = 'idle';
         }
     }
 
@@ -179,26 +180,13 @@ export class Player {
         if (this.attackState === 'recovery') {
             const maxRecovery = station === StationId.FORRO ? 0.6 : 0.3;
             const timeInRecovery = maxRecovery - this.attackStateTimer;
-            
             let canCombo = false;
 
             if (station === StationId.PHONK && timeInRecovery >= 0.1) canCombo = true;
-            
-            if (station === StationId.SAMBA) {
-                if (timeInRecovery <= 0.25) {
-                    canCombo = true;
-                } else {
-                    // Loga a punição visualmente se o input vier atrasado
-                    console.log(`[SAMBA] Errou o timing do combo! Atraso punido.`);
-                    return; 
-                }
-            }
-
+            if (station === StationId.SAMBA && timeInRecovery <= 0.25) canCombo = true;
             if (station === StationId.FORRO) canCombo = true;
 
-            if (canCombo) {
-                this.startAttack();
-            }
+            if (canCombo) this.startAttack();
         }
     }
 
@@ -217,7 +205,7 @@ export class Player {
         const attackOrigin = this.mesh.position.clone();
         const hitCenter = attackOrigin.add(playerForward.clone().multiplyScalar(range));
 
-        const hits = targets.filter(t => t.mesh.position.distanceTo(hitCenter) <= 1.5);
+        const hits = targets.filter(t => t.state === 'active' && t.mesh.position.distanceTo(hitCenter) <= 1.5);
 
         if (hits.length > 0) {
             if (station !== StationId.FORRO) {
@@ -225,40 +213,46 @@ export class Player {
                 hits.length = 1;
             }
 
+            // Payoff Forró: Dano em Área
+            if (station === StationId.FORRO && hits.length >= 2) {
+                this.hud.showPopup("ATAQUE EM ÁREA!", "#FF7F27");
+            }
+
+            // Incrementa Contador Global
+            this.globalCombo += hits.length;
+            this.hud.updateCombo(this.globalCombo);
+
             hits.forEach(t => {
                 let finalDamage = damage;
-                let logMsg = '';
                 
                 if (station === StationId.PHONK) {
-                    const bonus = Math.min(this.phonkCombo * 0.05, 0.30);
-                    finalDamage *= (1 + bonus);
-                    logMsg = `[PHONK] Hit! Combo: ${this.phonkCombo} | Dano: ${finalDamage.toFixed(1)} (+${(bonus*100).toFixed(0)}%)`;
+                    finalDamage *= (1 + Math.min(this.phonkCombo * 0.05, 0.30));
                 }
                 
-                if (station === StationId.SAMBA) {
-                    if (this.timeSinceLastDash <= 1.0) {
-                        finalDamage *= 1.5;
-                        logMsg = `[SAMBA] CONTRA-ATAQUE CRÍTICO! Dano: ${finalDamage.toFixed(1)}`;
-                    } else {
-                        logMsg = `[SAMBA] Hit Normal. Dano: ${finalDamage.toFixed(1)}`;
-                    }
-                }
-
-                if (station === StationId.FORRO) {
-                    logMsg = `[FORRO] Dano em Área! Dano: ${finalDamage.toFixed(1)}`;
+                if (station === StationId.SAMBA && this.timeSinceLastDash <= 1.0) {
+                    finalDamage *= 1.5;
+                    this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700"); // Payoff Samba
                 }
 
                 t.hit(playerForward, finalDamage);
-                console.log(logMsg);
             });
 
             this.timeSinceLastHit = 0;
-            if (station === StationId.PHONK) this.phonkCombo++;
+            
+            if (station === StationId.PHONK) {
+                this.phonkCombo++;
+                // Payoff Phonk: Teto de dano (+30%) atingido aos 6 hits
+                if (this.phonkCombo >= 6 && !this.phonkMaxTriggered) {
+                    this.hud.showPopup("DANO MÁXIMO!", "#39FF14");
+                    this.phonkMaxTriggered = true;
+                }
+            }
         } else {
-            // Regra Phonk: Errar o vento reseta
             if (station === StationId.PHONK && this.phonkCombo > 0) {
                 this.phonkCombo = 0;
-                console.log(`[PHONK] Errou o ataque! Combo resetado para 0.`);
+                this.phonkMaxTriggered = false;
+                this.globalCombo = 0;
+                this.hud.updateCombo(0);
             }
         }
     }
@@ -266,22 +260,19 @@ export class Player {
     private executeDashDamage(targets: Target[]) {
         const playerForward = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
         targets.forEach(target => {
-            if (target.mesh.position.distanceTo(this.mesh.position) <= 1.0) {
+            if (target.state === 'active' && target.mesh.position.distanceTo(this.mesh.position) <= 1.0) {
                 if (!this.dashHitTargets.has(target)) {
                     target.hit(playerForward, this.baseDamage * 0.5); 
                     this.dashHitTargets.add(target);
-                    console.log(`[FORRO] Dano de atropelamento pelo Dash! Dano: ${(this.baseDamage * 0.5).toFixed(1)}`);
                 }
             }
         });
     }
 
     private handleMovement(delta: number, input: InputManager, camera: THREE.Camera, station: StationId) {
-        // Bloqueia movimentação APENAS durante o dash. Fluidez total (kiting) restaurada durante os ataques.
         if (this.isDashing) return;
 
-        // Diferenças drásticas de velocidade baseadas na estação
-        let currentSpeed = this.baseSpeed; // 6.0
+        let currentSpeed = this.baseSpeed;
         if (station === StationId.PHONK) currentSpeed = 8.5;
         if (station === StationId.FORRO) currentSpeed = 4.5;
 
@@ -299,7 +290,6 @@ export class Player {
         camera.getWorldDirection(forward);
         forward.y = 0;
         forward.normalize();
-
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 

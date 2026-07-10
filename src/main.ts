@@ -8,6 +8,7 @@ import { InputManager } from './input';
 import { AudioManager } from './audio';
 import { RadioSystem, StationId } from './radio';
 import { EffectsManager } from './effects';
+import { UIManager } from './hud';
 
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
@@ -21,7 +22,9 @@ window.addEventListener('resize', () => {
     cameraSystem.camera.updateProjectionMatrix();
 });
 
-const player = new Player();
+// Inicializa UI e Player interligados
+const hudManager = new UIManager();
+const player = new Player(hudManager);
 gameScene.scene.add(player.mesh);
 
 const targets: Target[] = [
@@ -31,7 +34,6 @@ const targets: Target[] = [
 ];
 targets.forEach(t => gameScene.scene.add(t.mesh));
 
-// --- 3. INICIALIZA SISTEMA DE RÁDIO E EFEITOS ---
 const audioManager = new AudioManager();
 const effectsManager = new EffectsManager(gameScene.scene, cameraSystem);
 const radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
@@ -67,14 +69,11 @@ const setTimeScale = (scale: number, unscaledDuration: number) => {
     slowMoTimer = unscaledDuration; 
 };
 
-// --- 4. GAME LOOP ---
-// Chame direto do THREE, sem precisar importar nada novo!
 const timer = new THREE.Timer();
 
 function animate() {
     requestAnimationFrame(animate);
     
-    // O Timer exige que seu estado seja atualizado manualmente a cada frame
     timer.update();
     const unscaledDelta = timer.getDelta();
     
@@ -86,11 +85,12 @@ function animate() {
     const delta = unscaledDelta * timeScale;
 
     player.update(delta, input, cameraSystem.camera, targets, radioSystem.currentStation, setTimeScale);
-    targets.forEach(t => t.update(delta));
+    
+    // Alvos agora necessitam conhecer a câmera para fazer a projeção 2D da tela
+    targets.forEach(t => t.update(delta, cameraSystem.camera));
     
     cameraSystem.update(player.mesh.position, delta);
     
-    // NOVO: Passamos a currentStation para o EffectsManager desenhar a Aura constantemente
     effectsManager.update(unscaledDelta, player.mesh.position, radioSystem.currentStation);
     
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
