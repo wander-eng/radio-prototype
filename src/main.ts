@@ -11,7 +11,6 @@ import { RadioSystem, StationId } from './radio';
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
 
-// 1. Inicializa subsistemas base
 const gameScene = new GameScene(appContainer);
 const cameraSystem = new FollowCamera();
 const input = new InputManager();
@@ -21,59 +20,71 @@ window.addEventListener('resize', () => {
     cameraSystem.camera.updateProjectionMatrix();
 });
 
-// 2. Instancia entidades
 const player = new Player();
 gameScene.scene.add(player.mesh);
 
+// Adicionado um 3º Alvo para facilitar o teste da diferença de raio/AoE do Forró
 const targets: Target[] = [
     new Target(new THREE.Vector3(-3, 0, -5)),
+    new Target(new THREE.Vector3(-1.5, 0, -4.5)), 
     new Target(new THREE.Vector3(3, 0, -5))
 ];
 targets.forEach(t => gameScene.scene.add(t.mesh));
 
-// 3. Inicializa Sistema de Rádio e Áudio
 const audioManager = new AudioManager();
 const radioSystem = new RadioSystem(player, gameScene, audioManager);
 
 let gameStarted = false;
 
-// Trata a política de autoplay do navegador: o áudio só inicializa após a primeira interação
 const startGame = async () => {
     if (gameStarted) return;
     gameStarted = true;
     
-    // Inicializa o contexto de áudio e carrega os buffers
     await audioManager.init();
     await audioManager.loadAll();
     
-    // Define a estação padrão (Phonk) sem disparar o ruído de sintonia
     radioSystem.setStation(StationId.SAMBA, true);
 };
 
-// Captura a primeira interação (clique ou pressionar qualquer tecla, ex: WASD)
 window.addEventListener('keydown', startGame, { once: true });
 window.addEventListener('click', startGame, { once: true });
 
-// Listeners exclusivos para a troca de rádio
 window.addEventListener('keydown', (e) => {
-    if (!gameStarted) return; // Só permite trocar se o jogo já iniciou
+    if (!gameStarted) return; 
     
     if (e.code === 'Digit1') radioSystem.setStation(StationId.PHONK);
     if (e.code === 'Digit2') radioSystem.setStation(StationId.SAMBA);
     if (e.code === 'Digit3') radioSystem.setStation(StationId.FORRO);
 });
 
-// 4. Game Loop
+// --- GERENCIAMENTO DE TEMPO ---
+let timeScale = 1.0;
+let slowMoTimer = 0;
+
+const setTimeScale = (scale: number, unscaledDuration: number) => {
+    timeScale = scale;
+    slowMoTimer = unscaledDuration; // Tempo real (unscaled) de duração do evento
+};
+
 const clock = new THREE.Clock();
 
 function animate() {
     requestAnimationFrame(animate);
-    const delta = clock.getDelta();
+    
+    const unscaledDelta = clock.getDelta();
+    
+    if (slowMoTimer > 0) {
+        slowMoTimer -= unscaledDelta;
+        if (slowMoTimer <= 0) timeScale = 1.0; 
+    }
 
-    player.update(delta, input, cameraSystem.camera, targets);
+    const delta = unscaledDelta * timeScale;
+
+    // Removemos o unscaledDelta da chamada abaixo
+    player.update(delta, input, cameraSystem.camera, targets, radioSystem.currentStation, setTimeScale);
+    
     targets.forEach(t => t.update(delta));
     cameraSystem.update(player.mesh.position, delta);
-    
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
 }
 
