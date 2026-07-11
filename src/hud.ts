@@ -9,11 +9,9 @@ export class UIManager {
     private pauseOverlay: HTMLDivElement;
     public isPaused = false;
     
-    // Callbacks do Menu e Áudio
     public onMusicVolumeChange?: (val: number) => void;
     public onSfxVolumeChange?: (val: number) => void;
     
-    // NOVO: Callbacks de Estado do Jogo
     public onPause?: () => void;
     public onResume?: () => void;
 
@@ -46,13 +44,16 @@ export class UIManager {
 
         const topRight = document.createElement('div');
         topRight.className = 'hud-top-right';
+        
+        // ATUALIZADO: Letreiro com Pular em vez de Ataque no Espaço
         topRight.innerHTML = `
             <div class="hud-controls-title">CONTROLES</div>
             <div class="hud-controls-hint">
-                Mover: <kbd>WASD</kbd> ou <kbd>Setas</kbd><br>
-                Ataque: <kbd>Espaço</kbd> ou <kbd>LMB</kbd><br>
-                Dash: <kbd>Shift</kbd> ou <kbd>RMB</kbd><br>
-                Rádio: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> ou <kbd>Scroll</kbd><br>
+                Mover: <kbd>WASD</kbd> / <kbd>Setas</kbd><br>
+                Ataque: <kbd>LMB</kbd><br>
+                Pular: <kbd>Espaço</kbd> (x2)<br>
+                Dash: <kbd>Shift</kbd> / <kbd>RMB</kbd><br>
+                Rádio: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> / <kbd>Scroll</kbd><br>
                 Pausar: <kbd>ESC</kbd>
             </div>
         `;
@@ -126,7 +127,6 @@ export class UIManager {
         }
     }
 
-    // NOVO: Dispara os callbacks quando pausa ou despausa
     private pauseGame() {
         this.isPaused = true;
         this.pauseOverlay.classList.remove('hidden');
