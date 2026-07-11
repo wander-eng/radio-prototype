@@ -25,12 +25,12 @@ export class Player {
     private timeSinceLastDash = 999;
     private dashHitTargets = new Set<Target>(); 
 
-    // Variáveis do motor de Pulo (NOVO)
+    // Variáveis do motor de Pulo
     private velocityY = 0;
     private gravity = 30; // Peso da queda
     private jumpForce = 12; // Força do pulo
     private jumpCount = 0;
-    private lastSpaceState = false; // Necessário para não pular 2x no mesmo milissegundo
+    private lastSpaceState = false; 
 
     private attackState: 'idle' | 'windup' | 'recovery' = 'idle';
     private attackStateTimer = 0;
@@ -97,7 +97,6 @@ export class Player {
         this.handleDash(delta, input, camera, currentStation, targets, setTimeScale);
         this.updateAttackState(delta, input, camera, currentStation, targets);
         
-        // ATUALIZADO: Ataque ocorre apenas com MouseLeft, liberando o Espaço
         const wantsToAttack = input.isPressed('MouseLeft');
         if (!this.isDashing && wantsToAttack) {
             this.tryAttack(currentStation, input, camera, targets); 
@@ -106,9 +105,7 @@ export class Player {
         this.handleMovement(delta, input, camera, currentStation);
     }
 
-    // --- NOVO: Sistema de Gravidade e Double Jump ---
     private handlePhysicsAndJump(delta: number, input: InputManager) {
-        // Se estivermos no dash, suspendemos a gravidade para flutuar para a frente
         if (!this.isDashing) {
             this.velocityY -= this.gravity * delta;
             this.mesh.position.y += this.velocityY * delta;
@@ -116,16 +113,14 @@ export class Player {
             this.velocityY = 0;
         }
 
-        // Colisão dura com o chão
         if (this.mesh.position.y <= 1.0) {
             this.mesh.position.y = 1.0;
             this.velocityY = 0;
-            this.jumpCount = 0; // Reseta os pulos ao tocar o chão
+            this.jumpCount = 0; 
         }
 
         const currentSpaceState = input.isPressed('Space');
         
-        // Verifica se a tecla ACABOU de ser pressionada
         if (currentSpaceState && !this.lastSpaceState) {
             if (this.jumpCount < 2) {
                 this.velocityY = this.jumpForce;
@@ -155,7 +150,6 @@ export class Player {
             if (dir.lengthSq() > 0) return dir.normalize();
         }
 
-        // Continua mirando no chão em Y = 0 mesmo se o personagem estiver pulando lá no alto
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         const targetPoint = new THREE.Vector3();
         raycaster.ray.intersectPlane(plane, targetPoint);
@@ -225,11 +219,17 @@ export class Player {
                 const targetRotation = Math.atan2(mouseDir.x, mouseDir.z);
                 const currentRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.mesh.rotation.y, 0));
                 const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetRotation, 0));
-                currentRot.slerp(targetQuat, 10 * delta);
+                currentRot.slerp(targetQuat, 10 * delta); // Slerp visual contínuo
                 this.mesh.rotation.y = new THREE.Euler().setFromQuaternion(currentRot).y;
             }
 
             if (this.attackStateTimer <= 0) {
+                // CORREÇÃO: Snap instantâneo na direção do mouse para garantir hitbox perfeito
+                if (station === StationId.FORRO) {
+                    const exactMouseDir = this.getMouseDirection(input, camera, targets);
+                    this.mesh.rotation.y = Math.atan2(exactMouseDir.x, exactMouseDir.z);
+                }
+
                 this.executeHitbox(station, targets);
                 this.attackState = 'recovery';
                 this.attackStateTimer = station === StationId.FORRO ? 0.6 : 0.3; 
@@ -267,7 +267,6 @@ export class Player {
         }
     }
 
-    // --- A FUNÇÃO VOLTA AQUI ---
     private startAttack() {
         this.attackState = 'windup';
         this.attackStateTimer = 0.1; 
@@ -288,7 +287,6 @@ export class Player {
         const hits = targets.filter(t => {
             if (t.state !== 'active') return false;
             
-            // ATUALIZADO: Ignora a altura (Eixo Y) para que os ataques aéreos acertem inimigos no chão
             const distToCenter = Math.hypot(t.mesh.position.x - hitCenter.x, t.mesh.position.z - hitCenter.z);
             
             if (station === StationId.FORRO) {
@@ -301,7 +299,6 @@ export class Player {
 
         if (hits.length > 0) {
             if (station !== StationId.FORRO) {
-                // Também atualizamos a ordenação para ignorar a altura
                 hits.sort((a, b) => 
                     Math.hypot(a.mesh.position.x - hitCenter.x, a.mesh.position.z - hitCenter.z) - 
                     Math.hypot(b.mesh.position.x - hitCenter.x, b.mesh.position.z - hitCenter.z)
@@ -353,7 +350,6 @@ export class Player {
     private executeDashDamage(targets: Target[]) {
         const playerForward = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
         targets.forEach(target => {
-            // ATUALIZADO: Dash também ignora altura
             const dist = Math.hypot(target.mesh.position.x - this.mesh.position.x, target.mesh.position.z - this.mesh.position.z);
             if (target.state === 'active' && dist <= 1.0) {
                 if (!this.dashHitTargets.has(target)) {
@@ -374,7 +370,6 @@ export class Player {
         const moveDir = this.getMovementDirection(input, camera);
 
         if (moveDir.lengthSq() > 0) {
-            // Movimentação ignora Y (Não deixamos o personagem "voar" pra frente ou pra baixo)
             moveDir.y = 0;
             this.mesh.position.add(moveDir.multiplyScalar(currentSpeed * delta));
             if (this.attackState === 'idle') {
