@@ -3,6 +3,8 @@ import { InputManager } from './input';
 import { Target } from './target';
 import { StationId } from './radio';
 import type { UIManager } from './hud';
+// NOVO: Importação das funções matemáticas extraídas
+import { phonkDamageMultiplier, sambaDamage, forroSweepHit } from './combat-math';
 
 export class Player {
     public mesh: THREE.Mesh;
@@ -219,12 +221,11 @@ export class Player {
                 const targetRotation = Math.atan2(mouseDir.x, mouseDir.z);
                 const currentRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.mesh.rotation.y, 0));
                 const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetRotation, 0));
-                currentRot.slerp(targetQuat, 10 * delta); // Slerp visual contínuo
+                currentRot.slerp(targetQuat, 10 * delta); 
                 this.mesh.rotation.y = new THREE.Euler().setFromQuaternion(currentRot).y;
             }
 
             if (this.attackStateTimer <= 0) {
-                // CORREÇÃO: Snap instantâneo na direção do mouse para garantir hitbox perfeito
                 if (station === StationId.FORRO) {
                     const exactMouseDir = this.getMouseDirection(input, camera, targets);
                     this.mesh.rotation.y = Math.atan2(exactMouseDir.x, exactMouseDir.z);
@@ -281,19 +282,24 @@ export class Player {
         const playerForward = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
         const attackOrigin = this.mesh.position.clone();
         
+        // Mantemos a localização estrita para o uso de outras funções como o hitCenter de ordenação
         const hitCenter = attackOrigin.clone().add(playerForward.clone().multiplyScalar(range));
-        const midPoint = attackOrigin.clone().add(playerForward.clone().multiplyScalar(range * 0.5));
 
         const hits = targets.filter(t => {
             if (t.state !== 'active') return false;
             
-            const distToCenter = Math.hypot(t.mesh.position.x - hitCenter.x, t.mesh.position.z - hitCenter.z);
-            
             if (station === StationId.FORRO) {
-                const distToMid = Math.hypot(t.mesh.position.x - midPoint.x, t.mesh.position.z - midPoint.z);
-                return distToCenter <= 1.5 || distToMid <= 1.5;
+                // ATUALIZADO: Uso da matemática extraída pura para a checagem em área
+                return forroSweepHit(
+                    { x: t.mesh.position.x, z: t.mesh.position.z },
+                    { x: attackOrigin.x, z: attackOrigin.z },
+                    { x: playerForward.x, z: playerForward.z },
+                    range,
+                    1.5
+                );
             }
             
+            const distToCenter = Math.hypot(t.mesh.position.x - hitCenter.x, t.mesh.position.z - hitCenter.z);
             return distToCenter <= 1.5;
         });
 
@@ -317,12 +323,15 @@ export class Player {
                 let finalDamage = damage;
                 
                 if (station === StationId.PHONK) {
-                    finalDamage *= (1 + Math.min(this.phonkCombo * 0.05, 0.30));
+                    finalDamage *= phonkDamageMultiplier(this.phonkCombo);
                 }
                 
-                if (station === StationId.SAMBA && this.timeSinceLastDash <= 1.0) {
-                    finalDamage *= 1.5;
-                    this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700");
+                if (station === StationId.SAMBA) {
+                    const isCounter = this.timeSinceLastDash <= 1.0;
+                    finalDamage = sambaDamage(finalDamage, isCounter);
+                    if (isCounter) {
+                        this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700");
+                    }
                 }
 
                 t.hit(playerForward, finalDamage);
