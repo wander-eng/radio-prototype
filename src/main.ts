@@ -9,6 +9,7 @@ import { AudioManager } from './audio';
 import { RadioSystem, StationId } from './radio';
 import { EffectsManager } from './effects';
 import { UIManager } from './hud';
+import { updateGameState } from './test-hook';
 
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
@@ -128,6 +129,9 @@ function animate() {
     cameraSystem.update(player.mesh.position, delta);
     effectsManager.update(unscaledDelta, player.mesh.position, radioSystem.currentStation);
     
+    // NOVO: Exposição de estado contínua para o Playwright
+    updateGameState(player, radioSystem, targets);
+
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
 }
 

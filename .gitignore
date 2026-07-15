@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Testes E2E descartáveis por fase — não versionar (ver lessons.md)
+e2e/scratch/
