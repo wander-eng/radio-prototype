@@ -18,7 +18,7 @@ export class EffectsManager {
     private confettiSystems: { group: THREE.Group, meshes: { mesh: THREE.Mesh, vel: THREE.Vector3, rot: THREE.Vector3 }[], life: number, maxLife: number }[] = [];
 
     // NOVO: Estado da Aura Contínua
-    private auraParticles: { mesh: THREE.Points, life: number, maxLife: number, type: StationId, angle: number, radius: number, baseY: number }[] = [];
+    private auraParticles: { mesh: THREE.Points, life: number, maxLife: number, type: StationId, angle: number, radius: number, baseY: number, baseSize: number }[] = [];
     private auraTimer = 0;
 
     constructor(scene: THREE.Scene, cameraSystem: FollowCamera) {
@@ -59,12 +59,12 @@ export class EffectsManager {
         }
     }
 
-    public update(unscaledDelta: number, playerPos: THREE.Vector3, currentStation: StationId | null) {
+    public update(unscaledDelta: number, playerPos: THREE.Vector3, currentStation: StationId | null, auraIntensity: number) {
         this.updateCameraEffects(unscaledDelta);
         this.updateSpawners(unscaledDelta, playerPos);
         this.updateParticles(unscaledDelta);
         this.updateConfetti(unscaledDelta);
-        this.updateContinuousAura(unscaledDelta, playerPos, currentStation);
+        this.updateContinuousAura(unscaledDelta, playerPos, currentStation, auraIntensity);
     }
 
     private updateCameraEffects(delta: number) {
@@ -277,10 +277,8 @@ export class EffectsManager {
         }
     }
 
-    private updateContinuousAura(delta: number, playerPos: THREE.Vector3, currentStation: StationId | null) {
-        if (!currentStation) return;
-
-        this.auraTimer += delta;
+    private updateContinuousAura(delta: number, playerPos: THREE.Vector3, currentStation: StationId | null, intensity: number) {
+        const normalizedIntensity = THREE.MathUtils.clamp(intensity, 0, 1);
         
         // Taxas de spawn ditam a densidade da aura
         const spawnRates = {
@@ -289,9 +287,16 @@ export class EffectsManager {
             [StationId.FORRO]: 0.04  // 25/s (Visível, circular)
         };
 
-        if (this.auraTimer > spawnRates[currentStation]) {
+        if (currentStation && normalizedIntensity > 0) {
+            this.auraTimer += delta;
+            const spawnInterval = spawnRates[currentStation] / normalizedIntensity;
+
+            if (this.auraTimer > spawnInterval) {
+                this.auraTimer = 0;
+                this.spawnAuraParticle(currentStation, playerPos, normalizedIntensity);
+            }
+        } else {
             this.auraTimer = 0;
-            this.spawnAuraParticle(currentStation, playerPos);
         }
 
         // Move a aura atrelada matematicamente ao centro do jogador
@@ -306,14 +311,14 @@ export class EffectsManager {
                 const x = playerPos.x + Math.cos(p.angle) * p.radius;
                 const z = playerPos.z + Math.sin(p.angle) * p.radius;
                 // Jitter garante visual "instável/nervoso"
-                const jitterX = (Math.random() - 0.5) * 0.1;
-                const jitterZ = (Math.random() - 0.5) * 0.1;
+                const jitterX = (Math.random() - 0.5) * 0.1 * normalizedIntensity;
+                const jitterZ = (Math.random() - 0.5) * 0.1 * normalizedIntensity;
                 p.mesh.position.set(x + jitterX, playerPos.y + p.baseY, z + jitterZ);
             } 
             else if (p.type === StationId.SAMBA) {
                 // Sinuosa (senoide), serpenteia para cima
                 p.baseY += delta * 1.0; 
-                const osc = Math.sin(p.life * Math.PI * 3) * 0.4; 
+                const osc = Math.sin(p.life * Math.PI * 3) * 0.4 * normalizedIntensity;
                 const currentRadius = p.radius + osc;
                 const x = playerPos.x + Math.cos(p.angle) * currentRadius;
                 const z = playerPos.z + Math.sin(p.angle) * currentRadius;
@@ -323,14 +328,15 @@ export class EffectsManager {
                 // Espiral rodopiante contínua
                 p.angle += delta * 8.0; 
                 p.baseY += delta * 1.2; 
-                const currentRadius = p.radius + Math.sin(p.life * 15) * 0.1; // Oscilação leve
+                const currentRadius = p.radius + Math.sin(p.life * 15) * 0.1 * normalizedIntensity; // Oscilação leve
                 const x = playerPos.x + Math.cos(p.angle) * currentRadius;
                 const z = playerPos.z + Math.sin(p.angle) * currentRadius;
                 p.mesh.position.set(x, playerPos.y + p.baseY, z);
             }
 
             const material = p.mesh.material as THREE.PointsMaterial;
-            material.opacity = 1 - (p.life / p.maxLife);
+            material.opacity = (1 - (p.life / p.maxLife)) * normalizedIntensity;
+            material.size = p.baseSize * normalizedIntensity;
 
             if (p.life >= p.maxLife) {
                 this.scene.remove(p.mesh);
@@ -341,7 +347,7 @@ export class EffectsManager {
         }
     }
 
-    private spawnAuraParticle(station: StationId, pos: THREE.Vector3) {
+    private spawnAuraParticle(station: StationId, pos: THREE.Vector3, intensity: number) {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
         
@@ -369,7 +375,12 @@ export class EffectsManager {
             radius = 0.8 + Math.random() * 0.3; 
         }
 
-        const material = new THREE.PointsMaterial({ color, size, transparent: true, opacity: 1 });
+        const material = new THREE.PointsMaterial({
+            color,
+            size: size * intensity,
+            transparent: true,
+            opacity: intensity
+        });
         const mesh = new THREE.Points(geometry, material);
         
         // O valor agora é lido e a partícula já nasce no lugar certo!
@@ -377,7 +388,7 @@ export class EffectsManager {
         
         this.scene.add(mesh);
         this.auraParticles.push({
-            mesh, life: 0, maxLife, type: station, angle, radius, baseY
+            mesh, life: 0, maxLife, type: station, angle, radius, baseY, baseSize: size
         });
     }
 }

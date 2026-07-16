@@ -1,9 +1,31 @@
+export type EnergyHudState = 'empty' | 'charging' | 'full';
+
+export function energyHudState(current: number, max: number = 100): EnergyHudState {
+    if (current <= 0) return 'empty';
+    if (current >= max) return 'full';
+    return 'charging';
+}
+
+export const HUD_CONTROL_HINTS = [
+    'Mover: <kbd>WASD</kbd> / <kbd>Setas</kbd>',
+    'Ataque: <kbd>LMB</kbd>',
+    'Pular: <kbd>Espaço</kbd> (x2)',
+    'Dash: <kbd>Shift</kbd> / <kbd>RMB</kbd>',
+    'Rádio: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> / <kbd>Scroll</kbd>',
+    'Transformação: <kbd>R</kbd>',
+    'Pausar: <kbd>ESC</kbd>'
+];
+
 export class UIManager {
     private container: HTMLDivElement;
     private stationText: HTMLDivElement;
     private comboText: HTMLDivElement;
     private popupText: HTMLDivElement;
     private playerHpFill: HTMLDivElement;
+    private energyContainer: HTMLDivElement;
+    private energyBar: HTMLDivElement;
+    private energyFill: HTMLDivElement;
+    private energyStatus: HTMLDivElement;
     private startMessage: HTMLDivElement;
     
     private pauseOverlay: HTMLDivElement;
@@ -38,9 +60,35 @@ export class UIManager {
         this.playerHpFill.className = 'hud-player-hp-fill';
         hpBg.appendChild(this.playerHpFill);
 
+        this.energyContainer = document.createElement('div');
+        this.energyContainer.className = 'hud-energy';
+
+        const energyLabel = document.createElement('div');
+        energyLabel.className = 'hud-energy-label';
+        energyLabel.innerText = 'CARGA DE TRANSFORMAÇÃO';
+
+        this.energyBar = document.createElement('div');
+        this.energyBar.className = 'hud-energy-bg';
+        this.energyBar.setAttribute('role', 'progressbar');
+        this.energyBar.setAttribute('aria-label', 'Carga de transformação');
+        this.energyBar.setAttribute('aria-valuemin', '0');
+        this.energyBar.setAttribute('aria-valuemax', '100');
+
+        this.energyFill = document.createElement('div');
+        this.energyFill.className = 'hud-energy-fill';
+        this.energyBar.appendChild(this.energyFill);
+
+        this.energyStatus = document.createElement('div');
+        this.energyStatus.className = 'hud-energy-status';
+
+        this.energyContainer.appendChild(energyLabel);
+        this.energyContainer.appendChild(this.energyBar);
+        this.energyContainer.appendChild(this.energyStatus);
+
         topLeft.appendChild(this.stationText);
         topLeft.appendChild(this.comboText);
         topLeft.appendChild(hpBg);
+        topLeft.appendChild(this.energyContainer);
 
         const topRight = document.createElement('div');
         topRight.className = 'hud-top-right';
@@ -49,12 +97,7 @@ export class UIManager {
         topRight.innerHTML = `
             <div class="hud-controls-title">CONTROLES</div>
             <div class="hud-controls-hint">
-                Mover: <kbd>WASD</kbd> / <kbd>Setas</kbd><br>
-                Ataque: <kbd>LMB</kbd><br>
-                Pular: <kbd>Espaço</kbd> (x2)<br>
-                Dash: <kbd>Shift</kbd> / <kbd>RMB</kbd><br>
-                Rádio: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> / <kbd>Scroll</kbd><br>
-                Pausar: <kbd>ESC</kbd>
+                ${HUD_CONTROL_HINTS.join('<br>')}
             </div>
         `;
 
@@ -112,6 +155,8 @@ export class UIManager {
         volSfx.oninput = () => {
             if (this.onSfxVolumeChange) this.onSfxVolumeChange(parseFloat(volSfx.value));
         };
+
+        this.updateEnergy(0);
     }
 
     public handleEscape() {
@@ -159,6 +204,9 @@ export class UIManager {
         this.stationText.style.color = colorHex;
         this.playerHpFill.style.backgroundColor = colorHex;
         this.playerHpFill.style.boxShadow = `0 0 8px ${colorHex}`;
+        this.energyFill.style.backgroundColor = colorHex;
+        this.energyFill.style.boxShadow = `0 0 10px ${colorHex}`;
+        this.energyStatus.style.color = colorHex;
     }
 
     public updateCombo(combo: number) {
@@ -184,5 +232,20 @@ export class UIManager {
     public updatePlayerHP(current: number, max: number) {
         const percentage = Math.max(0, (current / max) * 100);
         this.playerHpFill.style.width = `${percentage}%`;
+    }
+
+    public updateEnergy(current: number, max: number = 100) {
+        const safeMax = Math.max(1, max);
+        const clampedEnergy = Math.min(safeMax, Math.max(0, current));
+        const percentage = (clampedEnergy / safeMax) * 100;
+        const state = energyHudState(clampedEnergy, safeMax);
+
+        this.energyFill.style.width = `${percentage}%`;
+        this.energyBar.setAttribute('aria-valuenow', String(clampedEnergy));
+        this.energyContainer.dataset.state = state;
+
+        if (state === 'empty') this.energyStatus.innerText = 'SEM ENERGIA';
+        if (state === 'charging') this.energyStatus.innerText = 'CARREGANDO';
+        if (state === 'full') this.energyStatus.innerText = 'TRANSFORMAÇÃO DISPONÍVEL';
     }
 }

@@ -11,8 +11,13 @@ export const StationId = {
 
 export type StationId = typeof StationId[keyof typeof StationId];
 
+export function canChangeStation(transformed: boolean): boolean {
+    return !transformed;
+}
+
 export class RadioSystem {
     public currentStation: StationId | null = null;
+    private activeTrack: string | null = null;
     
     private player: Player;
     private gameScene: GameScene;
@@ -34,11 +39,43 @@ export class RadioSystem {
     public setStation(id: StationId, isInitialLoad = false) {
         if (this.currentStation === id) return;
 
-        const prevStation = this.currentStation;
         this.currentStation = id;
+        this.applyBaseAppearance();
+        this.switchTrack(this.getNormalTrackName(id));
 
-        // 1. Aplica Identidade Visual Estática
-        switch (id) {
+        // Efeitos dinâmicos de sintonia permanecem ativos no gameplay.
+        if (!isInitialLoad) {
+            this.audioManager.playTuningSequence();
+            this.effectsManager.playStationSwitchEffect(id, this.player.mesh.position);
+        }
+    }
+
+    public activateTransformation() {
+        if (!this.currentStation) return;
+
+        this.applyStationManifestation(this.currentStation);
+        const transformationTrack = this.getTransformationTrackName(this.currentStation);
+        this.audioManager.restartTrackFromBeginning(transformationTrack);
+        this.switchTrack(transformationTrack);
+        this.effectsManager.playStationSwitchEffect(this.currentStation, this.player.mesh.position);
+    }
+
+    public deactivateTransformation() {
+        if (!this.currentStation) return;
+
+        this.applyBaseAppearance();
+        const transformationTrack = this.getTransformationTrackName(this.currentStation);
+        this.switchTrack(this.getNormalTrackName(this.currentStation));
+        this.audioManager.stopTrack(transformationTrack, 0.2);
+    }
+
+    private applyBaseAppearance() {
+        this.player.setNeutralColor();
+        this.gameScene.setNeutralEnvironment();
+    }
+
+    private applyStationManifestation(station: StationId) {
+        switch (station) {
             case StationId.PHONK:
                 this.player.setEmissiveColor(0x39FF14);
                 this.gameScene.setEnvironmentColor(0x0a1a0a, 0.08); 
@@ -52,23 +89,21 @@ export class RadioSystem {
                 this.gameScene.setEnvironmentColor(0x4a2511, 0.04); 
                 break;
         }
+    }
 
-        // 2. Aplica Áudio
-        const getTrackName = (station: StationId) => {
-            if (station === StationId.PHONK) return 'phonk';
-            if (station === StationId.SAMBA) return 'samba';
-            return 'forro';
-        };
+    private getNormalTrackName(station: StationId): string {
+        if (station === StationId.PHONK) return 'phonk';
+        if (station === StationId.SAMBA) return 'samba';
+        return 'forro';
+    }
 
-        const fromTrack = prevStation ? getTrackName(prevStation) : null;
-        const toTrack = getTrackName(id);
+    private getTransformationTrackName(station: StationId): string {
+        return `${this.getNormalTrackName(station)}-transformation`;
+    }
 
-        this.audioManager.crossfade(fromTrack, toTrack, 0.2);
-
-        // 3. Efeitos Dinâmicos de Sintonia (Apenas no Gameplay)
-        if (!isInitialLoad) {
-            this.audioManager.playTuningSequence();
-            this.effectsManager.playStationSwitchEffect(id, this.player.mesh.position);
-        }
+    private switchTrack(nextTrack: string) {
+        if (this.activeTrack === nextTrack) return;
+        this.audioManager.crossfade(this.activeTrack, nextTrack, 0.2);
+        this.activeTrack = nextTrack;
     }
 }

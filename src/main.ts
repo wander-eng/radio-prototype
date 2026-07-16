@@ -6,10 +6,17 @@ import { Player } from './player';
 import { Target } from './target';
 import { InputManager } from './input';
 import { AudioManager } from './audio';
-import { RadioSystem, StationId } from './radio';
+import { canChangeStation, RadioSystem, StationId } from './radio';
 import { EffectsManager } from './effects';
 import { UIManager } from './hud';
-import { updateGameState } from './test-hook';
+import { installGameTestControls, updateGameState } from './test-hook';
+import {
+    auraIntensityForState,
+    canTransform,
+    clampEnergy,
+    drainTransformationEnergy,
+    energyGainForAttack
+} from './combat-math';
 
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
@@ -24,7 +31,25 @@ window.addEventListener('resize', () => {
 });
 
 const hudManager = new UIManager();
-const player = new Player(hudManager);
+let energy = 0;
+let transformed = false;
+hudManager.updateEnergy(energy);
+
+const setEnergy = (nextEnergy: number) => {
+    if (nextEnergy === energy) return;
+
+    energy = nextEnergy;
+    hudManager.updateEnergy(energy);
+    console.log(`[ENERGIA] ${energy.toFixed(2)}`);
+};
+
+const addEnergyForAttack = (successfulHitCount: number) => {
+    const gain = energyGainForAttack(successfulHitCount, transformed);
+    if (gain === 0) return;
+    setEnergy(clampEnergy(energy, gain));
+};
+
+const player = new Player(hudManager, addEnergyForAttack);
 gameScene.scene.add(player.mesh);
 
 const targets: Target[] = [
@@ -37,6 +62,28 @@ targets.forEach(t => gameScene.scene.add(t.mesh));
 const audioManager = new AudioManager();
 const effectsManager = new EffectsManager(gameScene.scene, cameraSystem);
 const radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
+
+const tryActivateTransformation = () => {
+    if (transformed || !radioSystem.currentStation || !canTransform(energy)) return;
+
+    transformed = true;
+    radioSystem.activateTransformation();
+};
+
+const updateTransformation = (deltaSeconds: number) => {
+    if (!transformed) return;
+
+    setEnergy(drainTransformationEnergy(energy, deltaSeconds));
+    if (energy === 0) {
+        transformed = false;
+        radioSystem.deactivateTransformation();
+    }
+};
+
+installGameTestControls({
+    setEnergy: (value) => setEnergy(clampEnergy(0, value)),
+    advanceTransformation: (deltaSeconds) => updateTransformation(Math.max(0, deltaSeconds))
+});
 
 // Conecta as barras de volume do Menu de Pause ao Motor de Áudio
 hudManager.onMusicVolumeChange = (value: number) => audioManager.setMusicVolume(value);
@@ -74,6 +121,7 @@ window.addEventListener('keydown', (e) => {
     
     // Bloqueia interações do rádio se estiver pausado
     if (hudManager.isPaused) return;
+    if (!canChangeStation(transformed)) return;
 
     if (e.code === 'Digit1') radioSystem.setStation(StationId.PHONK);
     if (e.code === 'Digit2') radioSystem.setStation(StationId.SAMBA);
@@ -81,7 +129,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('wheel', (e) => {
-    if (!gameStarted || !radioSystem.currentStation || hudManager.isPaused) return;
+    if (!gameStarted || !radioSystem.currentStation || hudManager.isPaused || !canChangeStation(transformed)) return;
     
     const stations = [StationId.PHONK, StationId.SAMBA, StationId.FORRO];
     const currentIndex = stations.indexOf(radioSystem.currentStation);
@@ -123,14 +171,30 @@ function animate() {
 
     const delta = unscaledDelta * timeScale;
 
+    if (input.consumePress('KeyR')) {
+        tryActivateTransformation();
+    }
+
     player.update(delta, input, cameraSystem.camera, targets, radioSystem.currentStation, setTimeScale);
     targets.forEach(t => t.update(delta, cameraSystem.camera));
+
+    updateTransformation(unscaledDelta);
     
     cameraSystem.update(player.mesh.position, delta);
-    effectsManager.update(unscaledDelta, player.mesh.position, radioSystem.currentStation);
+    const currentAuraIntensity = auraIntensityForState(energy, transformed);
+    effectsManager.update(
+        unscaledDelta,
+        player.mesh.position,
+        radioSystem.currentStation,
+        currentAuraIntensity
+    );
     
     // NOVO: Exposição de estado contínua para o Playwright
-    updateGameState(player, radioSystem, targets);
+    updateGameState(player, radioSystem, targets, {
+        energy,
+        transformed,
+        auraIntensity: currentAuraIntensity
+    });
 
     gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
 }

@@ -45,4 +45,10 @@ export class GameScene {
         // no Three.js para criar a ilusão de um ambiente infinito
         this.scene.background = new THREE.Color(colorHex);
     }
+
+    public setNeutralEnvironment() {
+        const neutralColor = 0x1a1a1a;
+        this.scene.fog = new THREE.FogExp2(neutralColor, 0.02);
+        this.scene.background = new THREE.Color(neutralColor);
+    }
 }

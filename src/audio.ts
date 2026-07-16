@@ -7,8 +7,8 @@ export class AudioManager {
     public musicGain: GainNode;
     public sfxGain: GainNode;
 
-    constructor() {
-        this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    constructor(context?: AudioContext) {
+        this.ctx = context ?? new (window.AudioContext || (window as any).webkitAudioContext)();
         
         this.musicGain = this.ctx.createGain();
         this.sfxGain = this.ctx.createGain();
@@ -28,6 +28,9 @@ export class AudioManager {
             { id: 'phonk', url: '/audio/phonk.mp3' },
             { id: 'samba', url: '/audio/samba.mp3' },
             { id: 'forro', url: '/audio/forro.mp3' },
+            { id: 'phonk-transformation', url: '/audio/phonk-transformation.mp3' },
+            { id: 'samba-transformation', url: '/audio/samba-transformation.mp3' },
+            { id: 'forro-transformation', url: '/audio/forro-transformation.mp3' },
             { id: 'static', url: '/audio/static.mp3' },
             { id: 'stinger', url: '/audio/stinger.mp3' }
         ];
@@ -44,23 +47,38 @@ export class AudioManager {
     }
 
     private setupTracks() {
-        ['phonk', 'samba', 'forro'].forEach(id => {
-            const buffer = this.buffers.get(id);
-            if (buffer) {
-                const source = this.ctx.createBufferSource();
-                source.buffer = buffer;
-                source.loop = true;
-                
-                const gain = this.ctx.createGain();
-                gain.gain.value = 0; 
-                
-                source.connect(gain);
-                gain.connect(this.musicGain); 
-                source.start(0);
-                
-                this.tracks.set(id, { source, gain });
-            }
-        });
+        ['phonk', 'samba', 'forro'].forEach(id => this.createLoopingTrack(id));
+    }
+
+    private createLoopingTrack(id: string) {
+        const buffer = this.buffers.get(id);
+        if (!buffer) return;
+
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+
+        source.connect(gain);
+        gain.connect(this.musicGain);
+        source.start(0, 0);
+
+        this.tracks.set(id, { source, gain });
+    }
+
+    public restartTrackFromBeginning(id: string) {
+        this.stopTrack(id);
+        this.createLoopingTrack(id);
+    }
+
+    public stopTrack(id: string, delay: number = 0) {
+        const track = this.tracks.get(id);
+        if (!track) return;
+
+        track.source.stop(this.ctx.currentTime + Math.max(0, delay));
+        this.tracks.delete(id);
     }
 
     public crossfade(fromId: string | null, toId: string, duration: number = 0.2) {
