@@ -1,5 +1,5 @@
 # Manifesto Criativo
-Nome do projeto: Radio Prototype
+*(nome do projeto: a definir)*
 
 ## High Concept
 
@@ -15,7 +15,9 @@ O protagonista tem um rádio tocando dentro da cabeça. Trocar de "estação" mu
 
 Estações em teste: **Phonk** (agressão, dash-cancel, pressão constante), **Samba** (esquiva/parry, contra-ataque, precisão) e **Forró** (giros, área, fluxo contínuo). Especificação completa de cada uma (fantasia, feeling, feedback audiovisual, gameplay) mantida à parte, fora deste documento, como referência de produção.
 
-**Princípio:** o rádio não muda atributos — o rádio muda quem o personagem é. Toda estação altera identidade visual, sonora e mecânica ao mesmo tempo; uma estação que só troca um número por trás do mesmo personagem não conta como o conceito funcionando.
+**Princípio:** o rádio não muda atributos — o rádio muda quem o personagem é. Toda estação altera identidade mecânica (dano, velocidade, dash) instantaneamente e sempre, ao trocar de estação; uma estação que só troca um número por trás do mesmo personagem não conta como o conceito funcionando.
+
+**Transformação:** a manifestação visual e sonora completa da estação (cor do personagem, fog da cena, faixa musical) não é mais instantânea — é conquistada. O personagem começa num estado base neutro (cor constante, cenário metálico sem tingimento de estação) e carrega uma barra de energia ao acertar inimigos. Conforme carrega, uma aura na cor da estação selecionada cresce em intensidade, dando prévia visual contínua da transformação a caminho. Com a barra cheia, o jogador aciona a transformação manualmente — nesse momento cor, fog e a faixa de música mudam para a manifestação completa daquela estação, incluindo uma música emblemática própria (diferente do loop padrão). A troca de estação via tecla (mecânica) continua livre e instantânea o tempo todo, inclusive depois de transformado — a transformação é uma camada de recompensa por cima do sistema mecânico, não uma substituição dele.
 
 ## Regras de Tom
 
@@ -36,6 +38,6 @@ Estações em teste: **Phonk** (agressão, dash-cancel, pressão constante), **S
 
 **Protagonista (aparência, personalidade, capacidades):** Lobo (DC Comics — rádio tocando na cabeça), jovem Joseph Joestar, Jetstream Sam (MGR Revengeance), Lúcio (Overwatch), Ronaldinho Gaúcho.
 
-**Comédia:** God Hand (jogo), White Chicks, Superhero Movie, Auto da Compadecida, caricaturas.
+**Comédia:** God Hand (jogo), White Chicks, Superhero Movie, Auto da Compadecida, canal Peixe Aquático (YouTube), canal Animadorgas (YouTube).
 
 **Som:** Phonk brasileiro (identidade sonora).

@@ -1,0 +1,112 @@
+# Lessons — Radio Prototype
+
+Registro de bugs resolvidos e suas causas raiz, pra não repetir o mesmo erro em fases futuras. Mantido manualmente (sem automação) — toda vez que uma correção real acontecer, adiciona uma entrada nova aqui, no mesmo formato.
+
+## Como usar este arquivo
+
+- Cada entrada é sobre uma **causa raiz**, não sobre o sintoma. Se a correção foi só "ajustei um número", geralmente não vale entrada aqui — isso é iteração normal, não lição estrutural.
+- Vale entrada quando o erro revela um **padrão que pode se repetir**: uma ambiguidade de spec, uma suposição errada da IA, uma categoria de bug que pode aparecer de novo em outro contexto.
+- Antes de escrever uma spec ou prompt novo, vale reler este arquivo — é o "não cometa esse erro de novo" do projeto.
+- Antes de registrar uma entrada baseada no que uma IA *relatou* ter corrigido, confirme contra o diff real do código — ver L-006.
+
+## Nota sobre numeração de fase
+
+L-001 a L-003 usam a numeração original da vertical slice (Fase 0-5, todas concluídas). A partir de L-004, as entradas usam descrição em vez de número de fase, porque o Roadmap Macro criado depois reaproveita os mesmos números (Fase 1-6) para etapas diferentes — usar "Fase 4" ou "Fase 5" nessas entradas colidiria com o roadmap novo.
+
+## Instrução para o Gemini
+
+Você tem acesso ao histórico de commits e ao código atual deste repositório. Revise o `git log` e o código para identificar se houve outras correções reais (não apenas ajustes de valor/tuning) ainda não registradas aqui. Se encontrar, adicione novas entradas seguindo o mesmo formato. Não invente entradas — só adicione o que for verificável no histórico real, e confirme contra o código antes de descrever uma correção como aplicada.
+
+---
+
+## L-001 — Janelas de recovery/combo não devem bloquear movimento por padrão
+
+**Fase:** 3 (diferenças mecânicas e dash por estação)
+
+**Sintoma:** atacar travava o personagem no lugar até o fim da animação/recovery, impedindo movimento — regressão em relação às Fases 0-2, que permitiam mover e atacar ao mesmo tempo.
+
+**Causa raiz:** o prompt da Fase 3 introduziu janelas de recovery/combo (100ms Phonk, 250ms Samba, 600ms Forró) sem especificar que elas deveriam afetar só a capacidade de **encadear o próximo ataque**, não a capacidade de **se mover**. Na ausência dessa especificação explícita, a IA assumiu o padrão mais comum em jogos de luta, onde recovery trava movimento.
+
+**Correção:** desacoplar explicitamente, no prompt e no código, o estado "posso encadear combo" do estado "posso me mover".
+
+**Lição:** qualquer prompt futuro que mencione janela de recovery/animação/combo precisa declarar explicitamente se o movimento fica livre ou não durante essa janela. Não presumir que a IA vai inferir a intenção certa.
+
+---
+
+## L-002 — Rotação interpolada (slerp) pode não convergir antes de um cálculo de gameplay que depende dela
+
+**Fase:** 3, bug encontrado e corrigido depois da Fase 5
+
+**Sintoma:** no Forró, o ataque não conectava especificamente quando o jogador girava continuamente ao redor do inimigo, mesmo mirando corretamente.
+
+**Causa raiz:** durante o windup do Forró, a rotação do personagem persegue a direção do mouse via slerp parcial a cada frame, numa janela de só 0.1s (~6 frames). Esse slerp nunca converge 100% dentro dessa janela — o cálculo do hitbox usava uma rotação defasada em relação à direção real do mouse no instante do golpe, mais perceptível durante giro contínuo.
+
+**Correção (confirmada no código atual, `updateAttackState`):** forçar um snap exato da rotação para a direção real do mouse imediatamente antes de calcular o hitbox, mantendo o slerp gradual apenas para a suavidade visual durante o resto do windup.
+
+**Lição:** qualquer sistema que interpola uma variável **enquanto ela também alimenta um cálculo de gameplay** (dano, hit, colisão) precisa garantir convergência exata no momento exato desse cálculo — nunca presumir que a interpolação visual "chegou perto o suficiente". Esta foi a causa raiz real do bug de mira do Forró — ver L-006 sobre uma explicação alternativa que circulou e não correspondia ao código.
+
+---
+
+## L-003 — Especificar comportamento de um efeito não é o mesmo que especificar sua identidade visual
+
+**Fase:** 4 (câmera e partículas), correção pós-playtest
+
+**Sintoma:** a partícula de troca de estação da Samba seguia o personagem corretamente, exatamente como a spec pedia — mas o playtest considerou o efeito sem graça e sem personalidade, especialmente com o personagem parado.
+
+**Causa raiz:** a spec original descrevia o **comportamento** da partícula (um rastro que acompanha o personagem) mas não sua **forma/identidade visual** (o que ela parece, que sensação passa). O comportamento foi implementado corretamente; a ausência de identidade era uma lacuna da spec, não um erro de implementação.
+
+**Correção:** substituído por partículas com forma temática (confete/serpentina, remetendo a carnaval) em vez de um rastro genérico.
+
+**Lição:** specs de VFX/juice devem descrever tanto o comportamento (o que o efeito faz) quanto a forma/identidade (o que ele parece, que sensação evoca) — principalmente quando o objetivo do efeito é comunicar identidade/tema, não só função mecânica.
+
+---
+
+## L-004 — Bibliotecas em evolução e importações desatualizadas (alucinação de API)
+
+**Quando:** setup inicial do motor e game loop (antes da Fase 0 da vertical slice)
+
+**Sintoma:** Vite acusava erro fatal de build relatando `Failed to resolve import "three/addons/misc/Timer.js"`. O código sequer rodava.
+
+**Causa raiz:** a IA forneceu um caminho de importação desatualizado da biblioteca Three.js. Com atualizações recentes da engine (e a depreciação do `Clock`), o módulo `Timer` foi promovido diretamente para o núcleo principal da biblioteca (`THREE.Timer`), deixando de existir na pasta isolada de addons.
+
+**Correção:** remoção do import avulso e uso da classe diretamente da raiz (`new THREE.Timer()` a partir do import global).
+
+**Lição:** ao usar IA para gerar código que interage com bibliotecas front-end/3D em constante evolução (Three.js, React, Vite), desconfie de erros de caminho (`Failed to resolve import`). A IA frequentemente se baseia em versões antigas. O erro do console quase sempre aponta a pista da sintaxe moderna.
+
+---
+
+## L-005 — Esticar alcance de um ataque só movendo o centro do hitbox cria zonas mortas perto do atacante
+
+**Quando:** ajuste do ataque em área do Forró (confirmado no código atual, `executeHitbox`)
+
+**Sintoma:** risco identificado no ataque em área do Forró (alcance esticado para 2.4 unidades): se apenas o centro de uma única esfera de colisão for deslocado para a ponta do alcance, sem cobertura intermediária, inimigos colados no jogador ficam fora do raio de detecção.
+
+**Correção (presente no código atual):** checagem em dois pontos ao longo do vetor de ataque — um círculo no ponto médio (1.2 unidades, raio 1.5) e outro na ponta (2.4 unidades, raio 1.5) — cobrindo de forma contínua desde perto do jogador até o alcance máximo, sem buraco no meio.
+
+**Lição:** ampliar o alcance de ataques corpo a corpo não deve ser feito apenas distanciando o centro de uma esfera/hitbox única. Tratar o golpe como um volume contínuo (múltiplos pontos de checagem, capsule cast, ou box cast) evita pontos cegos perto do atacante.
+
+---
+
+## L-006 — A explicação de causa raiz relatada por uma IA nem sempre corresponde à mudança de código realmente aplicada
+
+**Quando:** durante o diagnóstico do bug de ataque do Forró (o mesmo bug do L-002)
+
+**Sintoma:** o Gemini relatou ter corrigido o bug "Forró não acerta o inimigo quando o jogador fica de frente, entre a câmera e o alvo" priorizando o raycast contra as malhas dos alvos antes do plano do chão ("se a mira bater no alvo, ignora o chão").
+
+**Causa raiz real:** essa lógica de priorização (raycast contra alvos primeiro, chão como fallback) **já existia no código antes dessa tentativa de correção, sem nenhuma alteração**. A causa raiz de fato — confirmada comparando o código antes e depois — era a convergência incompleta do slerp de rotação durante o windup, documentada no L-002. A explicação do raycast/perspectiva não correspondia a nenhuma mudança real no arquivo.
+
+**Lição:** quando uma IA relata "corrigi X fazendo Y", vale confirmar Y contra o diff real do código antes de registrar como lição ou aceitar como resolvido. A explicação verbal de causa raiz pode estar dissociada da mudança de código de fato aplicada — ou de nenhuma mudança real.
+
+---
+
+## L-007 — Introduzir física vertical (pulo) quebra colisões de gameplay pensadas em 2.5D
+
+**Quando:** implementação do double jump (item do Roadmap Macro Fase 2, implementado adiantado, fora da sequência formal de specs)
+
+**Sintoma:** ao pular, ataques e a colisão de dano do dash paravam de funcionar contra inimigos no chão.
+
+**Causa raiz:** o jogo começou plano, e a verificação de acerto usava distância 3D estrita (X, Y, Z). Quando a gravidade elevou a posição Y do jogador durante o pulo, o centro da colisão subiu com ele, fazendo o cálculo de proximidade falhar contra os inimigos no chão.
+
+**Correção (confirmada no código atual, `executeHitbox` e `executeDashDamage`):** achatar os cálculos de detecção de hit substituindo a distância 3D pela hipotenusa 2D (`Math.hypot(dx, dz)`, ignorando Y) — as hitboxes viraram cilindros infinitos em altura.
+
+**Lição:** ao passar de navegação estritamente terrestre para uma com física vertical real (pulos, plataformas), todo cálculo de distância/proximidade (hit detection, UI, interações) precisa ser revisado para decidir se exige altura exata (esfera) ou se deve ignorar altura (projeção num plano).

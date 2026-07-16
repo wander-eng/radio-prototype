@@ -23,5 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# Testes E2E descartáveis por fase — não versionar (ver lessons.md)
+# Testes E2E descartáveis por fase — não versionar (ver .specs/LESSONS.md)
 e2e/scratch/
+
+# Artefatos gerados por testes
+coverage/
+test-results/
+playwright-report/
