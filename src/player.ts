@@ -9,6 +9,7 @@ import { phonkDamageMultiplier, sambaDamage, forroSweepHit } from './combat-math
 export class Player {
     public mesh: THREE.Mesh;
     private hud: UIManager;
+    private onEnergyHit: (successfulHitCount: number) => void;
     
     private baseSpeed = 6;
     private baseDamage = 10;
@@ -43,8 +44,9 @@ export class Player {
     private phonkMaxTriggered = false; 
     private invulnerableTimer = 0; 
 
-    constructor(hud: UIManager) {
+    constructor(hud: UIManager, onEnergyHit: (successfulHitCount: number) => void) {
         this.hud = hud;
+        this.onEnergyHit = onEnergyHit;
         this.hud.updatePlayerHP(this.hp, this.maxHp);
 
         const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 16);
@@ -58,6 +60,13 @@ export class Player {
         material.emissive.setHex(colorHex);
         material.emissiveIntensity = 1.0; 
         material.color.setHex(colorHex); 
+    }
+
+    public setNeutralColor() {
+        const material = this.mesh.material as THREE.MeshStandardMaterial;
+        material.color.setHex(0x0055ff);
+        material.emissive.setHex(0x000000);
+        material.emissiveIntensity = 0;
     }
 
     public update(
@@ -323,7 +332,8 @@ export class Player {
                 let finalDamage = damage;
                 
                 if (station === StationId.PHONK) {
-                    finalDamage *= phonkDamageMultiplier(this.phonkCombo);
+                    const damageMultiplier = phonkDamageMultiplier(this.phonkCombo);
+                    finalDamage *= damageMultiplier;
                 }
                 
                 if (station === StationId.SAMBA) {
@@ -336,6 +346,8 @@ export class Player {
 
                 t.hit(playerForward, finalDamage);
             });
+
+            this.onEnergyHit(hits.length);
 
             this.timeSinceLastHit = 0;
             

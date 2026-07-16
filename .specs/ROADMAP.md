@@ -3,11 +3,13 @@
 
 ## Fase atual
 
-**Fase 1.5 — Transformation**
+**Fase 1.5 — Transformation ✅ Concluída**
 
-Tech spec vigente:
+Tech spec concluída:
 
 `docs/tech-specs/phase-01-05-transformation.md`
+
+Próxima fase: **Fase 2 — Core Combat**. A tech spec da Fase 2 ainda não foi escrita.
 
 ## Princípio de uso deste documento
 
@@ -30,20 +32,22 @@ Objetivo: validar o conceito central do jogo (o rádio).
 
 ---
 
-## Fase 1.5 — Transformation (Carga de Energia)
+## Fase 1.5 — Transformation (Carga de Energia) ✅ Concluída
 
 **Pergunta que essa fase responde:** ter que carregar energia e acionar a transformação parece uma recompensa satisfatória, ou só um passo extra chato antes de jogar de verdade?
 
 *Testável contra os alvos-treino já existentes — não depende de inimigo real (Fase 2) para ser validada, por isso vem antes dela: melhor ajustar o núcleo do combate com essa camada já madura do que construir inimigo em cima de um loop ainda incerto.*
 
-Specs possíveis:
-- Estado base neutro (cor constante, cenário sem tingimento de estação)
-- Barra de energia carregando ao acertar inimigos (taxa por hit a definir)
-- Aura escalando em intensidade conforme a carga (0-100%), na cor da estação selecionada no momento
-- Transformação manual (tecla R) só com barra cheia: cor do personagem, fog da cena, e troca da faixa de música para uma versão emblemática/especial da estação
-- Ver nota de direito autoral no `.specs/SKILL.md` (antipadrões) antes de decidir as faixas emblemáticas reais
-
-**Em aberto, decidir na spec desta fase:** a transformação dura para sempre até o jogador desativar, tem duração limitada, ou reseta ao ser atingido? A troca de estação via tecla continua acessível durante a transformação (sim, por decisão já tomada) — mas ao trocar de estação transformado, a manifestação visual/sonora da nova estação aparece instantaneamente ou precisa recarregar de novo?
+Resultado validado:
+- Estado base neutro com mecânica e faixa normal da estação ativas
+- Energia de 0 a 100, com ganho de +2 uma única vez por ataque bem-sucedido
+- Aura escalando durante a carga e permanecendo máxima durante a transformação
+- Transformação manual pela tecla R, disponível somente com energia cheia
+- Consumo contínuo da energia ao longo de aproximadamente 15 segundos
+- Manifestação visual e faixa emblemática da estação durante a transformação
+- Estação bloqueada durante a transformação e liberada novamente ao encerrá-la
+- HUD provisório de energia e indicação do comando R
+- Testes unitários, E2E e validação manual concluídos
 
 ---
 
@@ -139,11 +143,10 @@ Objetivo: explorar ideias maiores sem comprometer o escopo principal. Categoria 
 
 ## Próximas fases
 
-1. Concluir e validar a Fase 1.5 — Transformation.
-2. Escrever a tech spec da Fase 2.
-3. Implementar e validar a Fase 2 — Core Combat.
-4. Escrever a tech spec da Fase 3.
-5. Implementar e validar a Fase 3 — Game Feel.
+1. Escrever a tech spec da Fase 2.
+2. Implementar e validar a Fase 2 — Core Combat.
+3. Escrever a tech spec da Fase 3.
+4. Implementar e validar a Fase 3 — Game Feel.
 
 ---
 

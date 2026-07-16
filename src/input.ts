@@ -1,11 +1,13 @@
 export class InputManager {
     public keys: { [key: string]: boolean } = {};
+    private justPressed = new Set<string>();
     
     // NOVO: Inicializa nulo para proteger quem joga só no teclado
     public mousePosition: { x: number, y: number } | null = null;
 
     constructor() {
         window.addEventListener('keydown', (e) => {
+            if (!this.keys[e.code]) this.justPressed.add(e.code);
             this.keys[e.code] = true;
         });
         window.addEventListener('keyup', (e) => {
@@ -35,5 +37,11 @@ export class InputManager {
 
     public isPressed(code: string): boolean {
         return !!this.keys[code];
+    }
+
+    public consumePress(code: string): boolean {
+        if (!this.justPressed.has(code)) return false;
+        this.justPressed.delete(code);
+        return true;
     }
 }
