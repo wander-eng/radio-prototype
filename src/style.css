@@ -307,3 +307,76 @@ body, html {
   width: 100%;
   cursor: pointer;
 }
+
+/* --- TELA DE MORTE PROVISÓRIA --- */
+#death-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(3px);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  pointer-events: auto;
+}
+
+#death-overlay.hidden {
+  display: none;
+}
+
+.death-overlay-panel {
+  width: min(420px, 100%);
+  padding: clamp(28px, 6vw, 48px);
+  box-sizing: border-box;
+  text-align: center;
+  color: #fff;
+  background: rgba(15, 15, 15, 0.96);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.9);
+}
+
+.death-overlay-panel h1 {
+  margin: 0 0 14px;
+  font-size: clamp(32px, 7vw, 52px);
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.death-overlay-panel p {
+  margin: 0 0 30px;
+  font-size: clamp(18px, 4vw, 24px);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+#btn-revive {
+  min-width: 180px;
+  padding: 14px 28px;
+  color: #fff;
+  background: transparent;
+  border: 2px solid #fff;
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+#btn-revive:hover:not(:disabled) {
+  color: #000;
+  background: #fff;
+  transform: scale(1.04);
+}
+
+#btn-revive:focus-visible {
+  outline: 4px solid #ffd700;
+  outline-offset: 5px;
+}
+
+#btn-revive:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}

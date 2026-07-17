@@ -23,6 +23,10 @@ export class RadioSystem {
     private gameScene: GameScene;
     private audioManager: AudioManager;
     private effectsManager: EffectsManager;
+
+    public get activeTrackId(): string | null {
+        return this.activeTrack;
+    }
     
     constructor(
         player: Player,

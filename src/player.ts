@@ -1,15 +1,31 @@
 import * as THREE from 'three';
 import { InputManager } from './input';
-import { Target } from './target';
+import type { CombatTarget } from './combat-target';
 import { StationId } from './radio';
 import type { UIManager } from './hud';
 // NOVO: Importação das funções matemáticas extraídas
-import { phonkDamageMultiplier, sambaDamage, forroSweepHit } from './combat-math';
+import {
+    forroSweepHit,
+    phonkDamageMultiplier,
+    resolvePlayerAttack,
+    sambaDamage,
+    updateInvulnerabilityTimer
+} from './combat-math';
+import type { PlayerAttackDecision } from './combat-math';
+import {
+    decideForroDashEnergy,
+    decideSambaCounterHit,
+    resolveAttackAim,
+    updateCombatWindow
+} from './station-combat-math';
+
+const DAMAGE_INVULNERABILITY_SECONDS = 0.5;
 
 export class Player {
     public mesh: THREE.Mesh;
     private hud: UIManager;
     private onEnergyHit: (successfulHitCount: number) => void;
+    private onSambaDodge: () => void;
     
     private baseSpeed = 6;
     private baseDamage = 10;
@@ -17,6 +33,10 @@ export class Player {
 
     public maxHp = 100;
     public hp = 100;
+    public isDead = false;
+
+    private readonly initialPosition = new THREE.Vector3(0, 1, 4);
+    private damageInvulnerabilityTimer = 0;
 
     private lastStation: StationId | null = null;
     
@@ -25,8 +45,8 @@ export class Player {
     private dashTimer = 0;
     private dashCooldown = 0;
     private dashDirection = new THREE.Vector3();
-    private timeSinceLastDash = 999;
-    private dashHitTargets = new Set<Target>(); 
+    private dashHitTargets = new Set<CombatTarget>();
+    private forroDashEnergyGranted = false;
 
     // Variáveis do motor de Pulo
     private velocityY = 0;
@@ -42,17 +62,26 @@ export class Player {
     private phonkCombo = 0;
     private globalCombo = 0;
     private phonkMaxTriggered = false; 
-    private invulnerableTimer = 0; 
+    private sambaDodgeTimer = 0;
+    private sambaCounterTimer = 0;
+    private committedAimSource: 'direct' | 'assisted' | 'none' = 'none';
+    private committedAimTargetId: string | null = null;
+    private committedAttackCount = 0;
 
-    constructor(hud: UIManager, onEnergyHit: (successfulHitCount: number) => void) {
+    constructor(
+        hud: UIManager,
+        onEnergyHit: (successfulHitCount: number) => void,
+        onSambaDodge: () => void = () => undefined
+    ) {
         this.hud = hud;
         this.onEnergyHit = onEnergyHit;
+        this.onSambaDodge = onSambaDodge;
         this.hud.updatePlayerHP(this.hp, this.maxHp);
 
         const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 16);
         const material = new THREE.MeshStandardMaterial({ color: 0x0055ff }); 
         this.mesh = new THREE.Mesh(geometry, material);
-        this.mesh.position.y = 1; 
+        this.mesh.position.copy(this.initialPosition);
     }
 
     public setEmissiveColor(colorHex: number) {
@@ -69,21 +98,151 @@ export class Player {
         material.emissiveIntensity = 0;
     }
 
+    public get isDamageInvulnerable(): boolean {
+        return this.damageInvulnerabilityTimer > 0;
+    }
+
+    public get activeStation(): StationId | null {
+        return this.lastStation;
+    }
+
+    public get isCurrentlyDashing(): boolean {
+        return this.isDashing;
+    }
+
+    public get currentAttackState(): 'idle' | 'windup' | 'recovery' {
+        return this.attackState;
+    }
+
+    public get isAirborne(): boolean {
+        return this.mesh.position.y > 1 || this.velocityY !== 0;
+    }
+
+    public get isSambaDodgeActive(): boolean {
+        return this.sambaDodgeTimer > 0;
+    }
+
+    public get sambaCounterReady(): boolean {
+        return this.sambaCounterTimer > 0;
+    }
+
+    public get sambaCounterRemaining(): number {
+        return this.sambaCounterTimer;
+    }
+
+    public get comboCount(): number {
+        return this.globalCombo;
+    }
+
+    public get lastCommittedAimSource(): 'direct' | 'assisted' | 'none' {
+        return this.committedAimSource;
+    }
+
+    public get lastCommittedAimTargetId(): string | null {
+        return this.committedAimTargetId;
+    }
+
+    public get attackCommitCount(): number {
+        return this.committedAttackCount;
+    }
+
+    public get currentJumpCount(): number {
+        return this.jumpCount;
+    }
+
+    public get jumpInputReady(): boolean {
+        return !this.lastSpaceState;
+    }
+
+    public get forroDashEnergyWasGranted(): boolean {
+        return this.forroDashEnergyGranted;
+    }
+
+    public get forroDashHitCount(): number {
+        return this.dashHitTargets.size;
+    }
+
+    public openSambaDodgeWindow() {
+        if (this.isDead || this.lastStation !== StationId.SAMBA) return;
+        this.sambaDodgeTimer = 0.2;
+    }
+
+    public receiveAttack(damage: number): PlayerAttackDecision {
+        const result = resolvePlayerAttack(
+            this.hp,
+            damage,
+            this.maxHp,
+            {
+                dead: this.isDead,
+                globallyInvulnerable: this.isDamageInvulnerable,
+                sambaDodgeActive: this.isSambaDodgeActive && this.lastStation === StationId.SAMBA
+            }
+        );
+
+        if (result.dodgedBySamba) {
+            this.sambaDodgeTimer = 0;
+            this.sambaCounterTimer = 1;
+            this.onSambaDodge();
+            return result;
+        }
+        if (result.damageApplied === 0) return result;
+
+        this.hp = result.hp;
+        this.damageInvulnerabilityTimer = DAMAGE_INVULNERABILITY_SECONDS;
+        this.hud.updatePlayerHP(this.hp, this.maxHp);
+
+        if (result.killed) {
+            this.isDead = true;
+            this.stopLocalActions();
+            this.clearSambaState();
+        }
+
+        return result;
+    }
+
+    public updateCombatState(deltaSeconds: number) {
+        this.damageInvulnerabilityTimer = updateInvulnerabilityTimer(
+            this.damageInvulnerabilityTimer,
+            deltaSeconds
+        );
+    }
+
+    public prepareForDeathLifecycle() {
+        this.stopLocalActions();
+        this.clearSambaState();
+        this.phonkCombo = 0;
+        this.globalCombo = 0;
+        this.phonkMaxTriggered = false;
+        this.timeSinceLastHit = 999;
+        this.hud.updateCombo(0);
+    }
+
+    public resetAfterDeath() {
+        this.prepareForDeathLifecycle();
+        this.hp = this.maxHp;
+        this.isDead = false;
+        this.damageInvulnerabilityTimer = 0;
+        this.mesh.position.copy(this.initialPosition);
+        this.hud.updatePlayerHP(this.hp, this.maxHp);
+    }
+
     public update(
         delta: number, 
         input: InputManager, 
         camera: THREE.Camera, 
-        targets: Target[], 
+        targets: CombatTarget[],
         currentStation: StationId | null, 
-        setTimeScale: (scale: number, duration: number) => void
+        aimAssistTargets: readonly CombatTarget[] = []
     ) {
-        if (!currentStation) return;
+        this.updateCombatState(delta);
+        if (this.isDead || !currentStation) return;
 
         if (this.lastStation !== currentStation) {
             this.phonkCombo = 0;
             this.globalCombo = 0;
             this.phonkMaxTriggered = false;
             this.hud.updateCombo(0);
+            this.clearSambaState();
             
             if (currentStation === StationId.PHONK) this.hud.setStation('PHONK', '#39FF14');
             if (currentStation === StationId.SAMBA) this.hud.setStation('SAMBA', '#FFD700');
@@ -93,8 +252,8 @@ export class Player {
         }
 
         if (this.dashCooldown > 0) this.dashCooldown -= delta;
-        if (this.invulnerableTimer > 0) this.invulnerableTimer -= delta;
-        this.timeSinceLastDash += delta;
+        this.sambaDodgeTimer = updateCombatWindow(this.sambaDodgeTimer, delta);
+        this.sambaCounterTimer = updateCombatWindow(this.sambaCounterTimer, delta);
         this.timeSinceLastHit += delta;
 
         if (this.timeSinceLastHit > 2.0 && this.globalCombo > 0) {
@@ -105,8 +264,8 @@ export class Player {
         }
 
         this.handlePhysicsAndJump(delta, input);
-        this.handleDash(delta, input, camera, currentStation, targets, setTimeScale);
-        this.updateAttackState(delta, input, camera, currentStation, targets);
+        this.handleDash(delta, input, camera, currentStation, targets);
+        this.updateAttackState(delta, input, camera, currentStation, targets, aimAssistTargets);
         
         const wantsToAttack = input.isPressed('MouseLeft');
         if (!this.isDashing && wantsToAttack) {
@@ -142,9 +301,10 @@ export class Player {
         this.lastSpaceState = currentSpaceState;
     }
 
-    private getMouseDirection(input: InputManager, camera: THREE.Camera, targets: Target[]): THREE.Vector3 {
+    private getMouseAim(input: InputManager, camera: THREE.Camera, targets: readonly CombatTarget[]) {
+        const fallback = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
         if (!input.mousePosition) {
-            return new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+            return { direction: fallback, directDirection: null as THREE.Vector3 | null };
         }
 
         const raycaster = new THREE.Raycaster();
@@ -152,13 +312,16 @@ export class Player {
         raycaster.setFromCamera(mousePos, camera);
 
         const targetMeshes = targets.filter(t => t.state === 'active').map(t => t.mesh);
-        const intersects = raycaster.intersectObjects(targetMeshes);
+        const intersects = raycaster.intersectObjects(targetMeshes, false);
 
         if (intersects.length > 0) {
             const hitMesh = intersects[0].object;
             const dir = hitMesh.position.clone().sub(this.mesh.position);
             dir.y = 0; 
-            if (dir.lengthSq() > 0) return dir.normalize();
+            if (dir.lengthSq() > 0) {
+                dir.normalize();
+                return { direction: dir, directDirection: dir.clone() };
+            }
         }
 
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -168,13 +331,38 @@ export class Player {
         if (targetPoint) {
             const dir = targetPoint.sub(this.mesh.position);
             dir.y = 0;
-            if (dir.lengthSq() > 0) return dir.normalize();
+            if (dir.lengthSq() > 0) return { direction: dir.normalize(), directDirection: null as THREE.Vector3 | null };
         }
 
-        return new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
+        return { direction: fallback, directDirection: null as THREE.Vector3 | null };
     }
 
-    private handleDash(delta: number, input: InputManager, camera: THREE.Camera, station: StationId, targets: Target[], setTimeScale: (scale: number, duration: number) => void) {
+    private getCommittedAttackDirection(
+        input: InputManager,
+        camera: THREE.Camera,
+        targets: readonly CombatTarget[],
+        aimAssistTargets: readonly CombatTarget[]
+    ): THREE.Vector3 {
+        const aim = this.getMouseAim(input, camera, targets);
+        const selection = resolveAttackAim(
+            aim.directDirection ? { x: aim.directDirection.x, z: aim.directDirection.z } : null,
+            { x: this.mesh.position.x, z: this.mesh.position.z },
+            { x: aim.direction.x, z: aim.direction.z },
+            aimAssistTargets.map(target => ({
+                id: target.id,
+                x: target.mesh.position.x,
+                z: target.mesh.position.z,
+                active: target.state === 'active'
+            }))
+        );
+        this.committedAimSource = aim.directDirection
+            ? 'direct'
+            : selection.assisted ? 'assisted' : 'none';
+        this.committedAimTargetId = selection.candidateId;
+        return new THREE.Vector3(selection.direction.x, 0, selection.direction.z).normalize();
+    }
+
+    private handleDash(delta: number, input: InputManager, camera: THREE.Camera, station: StationId, targets: CombatTarget[]) {
         if (this.isDashing) {
             this.dashTimer -= delta;
             let speedMult = 3; 
@@ -202,8 +390,8 @@ export class Player {
                 this.isDashing = true;
                 this.dashTimer = 0.15;
                 this.dashCooldown = 0.4;
-                this.timeSinceLastDash = 0;
                 this.dashHitTargets.clear();
+                this.forroDashEnergyGranted = false;
                 
                 this.dashDirection.copy(this.getMovementDirection(input, camera));
                 if (this.dashDirection.lengthSq() === 0) {
@@ -213,20 +401,27 @@ export class Player {
                 this.attackState = 'idle';
 
                 if (station === StationId.SAMBA) {
-                    this.invulnerableTimer = 0.2;
-                    setTimeScale(0.5, 0.15);
+                    this.openSambaDodgeWindow();
+                    this.sambaCounterTimer = 1;
                 }
             }
         }
     }
 
-    private updateAttackState(delta: number, input: InputManager, camera: THREE.Camera, station: StationId, targets: Target[]) {
+    private updateAttackState(
+        delta: number,
+        input: InputManager,
+        camera: THREE.Camera,
+        station: StationId,
+        targets: CombatTarget[],
+        aimAssistTargets: readonly CombatTarget[]
+    ) {
         if (this.attackState === 'idle') return;
         this.attackStateTimer -= delta;
 
         if (this.attackState === 'windup') {
             if (station === StationId.FORRO) {
-                const mouseDir = this.getMouseDirection(input, camera, targets);
+                const mouseDir = this.getMouseAim(input, camera, targets).direction;
                 const targetRotation = Math.atan2(mouseDir.x, mouseDir.z);
                 const currentRot = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.mesh.rotation.y, 0));
                 const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetRotation, 0));
@@ -235,10 +430,9 @@ export class Player {
             }
 
             if (this.attackStateTimer <= 0) {
-                if (station === StationId.FORRO) {
-                    const exactMouseDir = this.getMouseDirection(input, camera, targets);
-                    this.mesh.rotation.y = Math.atan2(exactMouseDir.x, exactMouseDir.z);
-                }
+                const exactMouseDir = this.getCommittedAttackDirection(input, camera, targets, aimAssistTargets);
+                this.mesh.rotation.y = Math.atan2(exactMouseDir.x, exactMouseDir.z);
+                this.committedAttackCount++;
 
                 this.executeHitbox(station, targets);
                 this.attackState = 'recovery';
@@ -249,9 +443,9 @@ export class Player {
         }
     }
 
-    private tryAttack(station: StationId, input: InputManager, camera: THREE.Camera, targets: Target[]) {
+    private tryAttack(station: StationId, input: InputManager, camera: THREE.Camera, targets: CombatTarget[]) {
         const snapToMouse = () => {
-            const mouseDir = this.getMouseDirection(input, camera, targets);
+            const mouseDir = this.getMouseAim(input, camera, targets).direction;
             this.mesh.rotation.y = Math.atan2(mouseDir.x, mouseDir.z);
         };
 
@@ -282,7 +476,7 @@ export class Player {
         this.attackStateTimer = 0.1; 
     }
 
-    private executeHitbox(station: StationId, targets: Target[]) {
+    private executeHitbox(station: StationId, targets: CombatTarget[]) {
         let range = this.baseRange;
         let damage = this.baseDamage;
 
@@ -325,9 +519,7 @@ export class Player {
                 this.hud.showPopup("ATAQUE EM ÁREA!", "#FF7F27");
             }
 
-            this.globalCombo += hits.length;
-            this.hud.updateCombo(this.globalCombo);
-
+            let appliedHitCount = 0;
             hits.forEach(t => {
                 let finalDamage = damage;
                 
@@ -337,17 +529,23 @@ export class Player {
                 }
                 
                 if (station === StationId.SAMBA) {
-                    const isCounter = this.timeSinceLastDash <= 1.0;
-                    finalDamage = sambaDamage(finalDamage, isCounter);
-                    if (isCounter) {
-                        this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700");
-                    }
+                    finalDamage = sambaDamage(finalDamage, this.sambaCounterReady);
                 }
 
-                t.hit(playerForward, finalDamage);
+                const result = t.receiveHit(playerForward, finalDamage);
+                if (!result.applied) return;
+                appliedHitCount++;
+                const sambaCounter = decideSambaCounterHit(damage, this.sambaCounterReady, result.applied);
+                if (station === StationId.SAMBA && sambaCounter.consumeCounter) {
+                    this.sambaCounterTimer = 0;
+                    this.hud.showPopup("CONTRA-ATAQUE!", "#FFD700");
+                }
             });
 
-            this.onEnergyHit(hits.length);
+            if (appliedHitCount === 0) return;
+            this.globalCombo += appliedHitCount;
+            this.hud.updateCombo(this.globalCombo);
+            this.onEnergyHit(appliedHitCount);
 
             this.timeSinceLastHit = 0;
             
@@ -368,14 +566,21 @@ export class Player {
         }
     }
 
-    private executeDashDamage(targets: Target[]) {
+    private executeDashDamage(targets: CombatTarget[]) {
         const playerForward = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y)).normalize();
         targets.forEach(target => {
             const dist = Math.hypot(target.mesh.position.x - this.mesh.position.x, target.mesh.position.z - this.mesh.position.z);
             if (target.state === 'active' && dist <= 1.0) {
                 if (!this.dashHitTargets.has(target)) {
-                    target.hit(playerForward, this.baseDamage * 0.5); 
+                    const result = target.receiveHit(playerForward, this.baseDamage * 0.5);
                     this.dashHitTargets.add(target);
+                    const energyDecision = decideForroDashEnergy(
+                        this.forroDashEnergyGranted,
+                        result.applied,
+                        false
+                    );
+                    this.forroDashEnergyGranted = energyDecision.grantedForDash;
+                    if (energyDecision.grantEnergy) this.onEnergyHit(1);
                 }
             }
         });
@@ -416,4 +621,24 @@ export class Player {
         if (moveDir.lengthSq() > 0) moveDir.normalize();
         return moveDir;
     }
+
+    private stopLocalActions() {
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.dashCooldown = 0;
+        this.dashHitTargets.clear();
+        this.forroDashEnergyGranted = false;
+        this.velocityY = 0;
+        this.jumpCount = 0;
+        this.lastSpaceState = false;
+        this.attackState = 'idle';
+        this.attackStateTimer = 0;
+        this.sambaDodgeTimer = 0;
+    }
+
+    private clearSambaState() {
+        this.sambaDodgeTimer = 0;
+        this.sambaCounterTimer = 0;
+    }
+
 }

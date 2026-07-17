@@ -3,13 +3,11 @@
 
 ## Fase atual
 
-**Fase 1.5 — Transformation ✅ Concluída**
+**Fase 2 — Core Combat**
 
-Tech spec concluída:
+Tech spec vigente:
 
-`docs/tech-specs/phase-01-05-transformation.md`
-
-Próxima fase: **Fase 2 — Core Combat**. A tech spec da Fase 2 ainda não foi escrita.
+`docs/tech-specs/phase-02-core-combat.md`
 
 ## Princípio de uso deste documento
 
@@ -55,16 +53,14 @@ Resultado validado:
 
 **Pergunta que essa fase responde:** o combate continua divertido depois de alguns minutos?
 
-Specs possíveis:
-- Inimigo que ataca
-- IA simples
-- Sistema de HP do jogador (funcional — hoje é só scaffolding)
-- Morte / respawn
-- Arena de combate
-- Double Jump: implementado antecipadamente; revisar integração com o combate
-- Ataques aéreos
-- Melhorias no dash
-- Lock-on (opcional)
+Escopo definido na tech spec vigente:
+- Arena contínua com dois inimigos melee e um ranged
+- IA simples, telegraph, projéteis e coordenação de ataques
+- HP funcional, dano, morte e reset completo do jogador
+- Respawn individual dos inimigos
+- Double jump integrado ao combate e ataques inimigos sensíveis à altura
+- Esquiva real da Samba e ganho único de energia no dash do Forró
+- Soft aim assist estreito, sem hard lock-on
 
 *Nota: testar com 1-2 tipos de inimigo repetindo, não com sistema de waves — waves como progressão de dificuldade pertence à Fase 5. O feedback mínimo de acerto (knockback, destruição/respawn dos alvos) já existe da vertical slice e é suficiente para testar esta fase honestamente, sem precisar esperar a Fase 3.*
 
@@ -143,10 +139,9 @@ Objetivo: explorar ideias maiores sem comprometer o escopo principal. Categoria 
 
 ## Próximas fases
 
-1. Escrever a tech spec da Fase 2.
-2. Implementar e validar a Fase 2 — Core Combat.
-3. Escrever a tech spec da Fase 3.
-4. Implementar e validar a Fase 3 — Game Feel.
+1. Implementar e validar a Fase 2 — Core Combat.
+2. Escrever a tech spec da Fase 3.
+3. Implementar e validar a Fase 3 — Game Feel.
 
 ---
 

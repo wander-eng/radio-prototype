@@ -1,5 +1,36 @@
 export type EnergyHudState = 'empty' | 'charging' | 'full';
 
+export const DEATH_OVERLAY_COPY = {
+    title: 'Você morreu!',
+    prompt: 'Tentar de novo?',
+    action: 'Reviver'
+} as const;
+
+export class DeathOverlayGate {
+    public visible = false;
+    public reviveInProgress = false;
+
+    public open() {
+        this.visible = true;
+        this.reviveInProgress = false;
+    }
+
+    public tryBeginRevive(): boolean {
+        if (!this.visible || this.reviveInProgress) return false;
+        this.reviveInProgress = true;
+        return true;
+    }
+
+    public cancelRevive() {
+        if (this.visible) this.reviveInProgress = false;
+    }
+
+    public completeRevive() {
+        this.visible = false;
+        this.reviveInProgress = false;
+    }
+}
+
 export function energyHudState(current: number, max: number = 100): EnergyHudState {
     if (current <= 0) return 'empty';
     if (current >= max) return 'full';
@@ -29,6 +60,9 @@ export class UIManager {
     private startMessage: HTMLDivElement;
     
     private pauseOverlay: HTMLDivElement;
+    private deathOverlay: HTMLElement;
+    private reviveButton: HTMLButtonElement;
+    private readonly deathOverlayGate = new DeathOverlayGate();
     public isPaused = false;
     
     public onMusicVolumeChange?: (val: number) => void;
@@ -36,6 +70,7 @@ export class UIManager {
     
     public onPause?: () => void;
     public onResume?: () => void;
+    public onRevive?: () => Promise<void>;
 
     private popupTimeout: number | null = null;
 
@@ -156,7 +191,61 @@ export class UIManager {
             if (this.onSfxVolumeChange) this.onSfxVolumeChange(parseFloat(volSfx.value));
         };
 
+        this.deathOverlay = document.createElement('section');
+        this.deathOverlay.id = 'death-overlay';
+        this.deathOverlay.className = 'hidden';
+        this.deathOverlay.setAttribute('role', 'dialog');
+        this.deathOverlay.setAttribute('aria-modal', 'true');
+        this.deathOverlay.setAttribute('aria-labelledby', 'death-overlay-title');
+        this.deathOverlay.setAttribute('aria-describedby', 'death-overlay-prompt');
+
+        const deathPanel = document.createElement('div');
+        deathPanel.className = 'death-overlay-panel';
+
+        const deathTitle = document.createElement('h1');
+        deathTitle.id = 'death-overlay-title';
+        deathTitle.innerText = DEATH_OVERLAY_COPY.title;
+
+        const deathPrompt = document.createElement('p');
+        deathPrompt.id = 'death-overlay-prompt';
+        deathPrompt.innerText = DEATH_OVERLAY_COPY.prompt;
+
+        this.reviveButton = document.createElement('button');
+        this.reviveButton.id = 'btn-revive';
+        this.reviveButton.type = 'button';
+        this.reviveButton.innerText = DEATH_OVERLAY_COPY.action;
+        this.reviveButton.addEventListener('click', () => {
+            void this.requestRevive();
+        });
+
+        deathPanel.appendChild(deathTitle);
+        deathPanel.appendChild(deathPrompt);
+        deathPanel.appendChild(this.reviveButton);
+        this.deathOverlay.appendChild(deathPanel);
+        document.body.appendChild(this.deathOverlay);
+
         this.updateEnergy(0);
+    }
+
+    public get deathOverlayVisible(): boolean {
+        return this.deathOverlayGate.visible;
+    }
+
+    public get reviveInProgress(): boolean {
+        return this.deathOverlayGate.reviveInProgress;
+    }
+
+    public showDeathOverlay() {
+        this.deathOverlayGate.open();
+        this.reviveButton.disabled = false;
+        this.deathOverlay.classList.remove('hidden');
+        this.reviveButton.focus();
+    }
+
+    public completeDeathRevive() {
+        this.deathOverlayGate.completeRevive();
+        this.reviveButton.disabled = false;
+        this.deathOverlay.classList.add('hidden');
     }
 
     public handleEscape() {
@@ -232,6 +321,25 @@ export class UIManager {
     public updatePlayerHP(current: number, max: number) {
         const percentage = Math.max(0, (current / max) * 100);
         this.playerHpFill.style.width = `${percentage}%`;
+    }
+
+    private async requestRevive() {
+        if (!this.deathOverlayGate.tryBeginRevive()) return;
+        this.reviveButton.disabled = true;
+
+        if (!this.onRevive) {
+            this.deathOverlayGate.cancelRevive();
+            this.reviveButton.disabled = false;
+            return;
+        }
+
+        try {
+            await this.onRevive();
+        } catch (error) {
+            this.deathOverlayGate.cancelRevive();
+            this.reviveButton.disabled = false;
+            console.error('[REVIVE] Falha ao retomar o encontro.', error);
+        }
     }
 
     public updateEnergy(current: number, max: number = 100) {
