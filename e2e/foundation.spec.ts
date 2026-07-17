@@ -3,12 +3,9 @@ import { test, expect } from '@playwright/test';
 test.describe('Game Foundation E2E', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
-        
-        // Despacha a tela de "PRESSIONE QUALQUER TECLA"
-        await page.keyboard.press('Enter');
-        
-        // Aguarda a injeção do hook usando casting para any
         await page.waitForFunction(() => (window as any).__GAME_STATE__ !== undefined);
+        await page.evaluate(() => (window as any).__GAME_TEST__.startGame());
+        await page.waitForFunction(() => (window as any).__GAME_STATE__.station === 'forro');
     });
 
     test('1. Trocar de estação e confirmar estado', async ({ page }) => {

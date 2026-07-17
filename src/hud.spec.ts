@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { energyHudState, HUD_CONTROL_HINTS } from './hud';
+import {
+    DEATH_OVERLAY_COPY,
+    DeathOverlayGate,
+    energyHudState,
+    HUD_CONTROL_HINTS
+} from './hud';
 
 describe('energyHudState', () => {
     it('identifica energia vazia', () => {
@@ -30,5 +35,41 @@ describe('HUD_CONTROL_HINTS', () => {
         expect(controls).toContain('Rádio:');
         expect(controls).toContain('Transformação: <kbd>R</kbd>');
         expect(controls).toContain('Pausar:');
+    });
+});
+
+describe('DeathOverlayGate', () => {
+    it('abre a tela de morte e aceita somente uma retomada por ciclo', () => {
+        const gate = new DeathOverlayGate();
+
+        gate.open();
+        expect(gate.visible).toBe(true);
+        expect(gate.reviveInProgress).toBe(false);
+        expect(gate.tryBeginRevive()).toBe(true);
+        expect(gate.tryBeginRevive()).toBe(false);
+        expect(gate.reviveInProgress).toBe(true);
+    });
+
+    it('fecha somente ao completar e volta ao estado correto em uma morte futura', () => {
+        const gate = new DeathOverlayGate();
+
+        gate.open();
+        gate.tryBeginRevive();
+        expect(gate.visible).toBe(true);
+        gate.completeRevive();
+        expect(gate.visible).toBe(false);
+        expect(gate.reviveInProgress).toBe(false);
+
+        gate.open();
+        expect(gate.visible).toBe(true);
+        expect(gate.tryBeginRevive()).toBe(true);
+    });
+
+    it('mantem o texto obrigatorio do overlay', () => {
+        expect(DEATH_OVERLAY_COPY).toEqual({
+            title: 'Você morreu!',
+            prompt: 'Tentar de novo?',
+            action: 'Reviver'
+        });
     });
 });

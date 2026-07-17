@@ -110,3 +110,59 @@ Você tem acesso ao histórico de commits e ao código atual deste repositório.
 **Correção (confirmada no código atual, `executeHitbox` e `executeDashDamage`):** achatar os cálculos de detecção de hit substituindo a distância 3D pela hipotenusa 2D (`Math.hypot(dx, dz)`, ignorando Y) — as hitboxes viraram cilindros infinitos em altura.
 
 **Lição:** ao passar de navegação estritamente terrestre para uma com física vertical real (pulos, plataformas), todo cálculo de distância/proximidade (hit detection, UI, interações) precisa ser revisado para decidir se exige altura exata (esfera) ou se deve ignorar altura (projeção num plano).
+
+---
+
+## L-008 — `reuseExistingServer` exige controle sobre os servidores que ocupam a porta de teste
+
+**Quando:** validação E2E da Fase 2 — Core Combat, durante a implementação do melee jogável.
+
+**Sintoma:** as primeiras navegações do Playwright expiravam em `page.goto()`, enquanto casos executados depois no mesmo processo passavam. Repetições da suíte produziam resultados inconsistentes e criavam novas instâncias do servidor em portas alternativas.
+
+**Causa raiz:** havia servidores Vite duplicados ou obsoletos escutando a porta 5173 separadamente em IPv4 e IPv6. Com `reuseExistingServer: true`, o Playwright reutilizava o servidor encontrado em vez de necessariamente iniciar uma instância limpa. A opção não é um problema por si só; a instabilidade ocorre quando não há garantia de que existe exatamente um servidor válido, pertencente ao workspace atual, atendendo naquela porta.
+
+**Correção:** verificar os listeners da porta configurada, identificar os processos que pertencem a este workspace e encerrar somente essas instâncias Vite antes de uma execução limpa. Não encerrar indiscriminadamente todos os processos Node, pois eles podem pertencer a outras ferramentas ou projetos.
+
+**Lição:** após uma falha E2E de navegação ou inicialização, primeiro reproduzir o caso focado e inspecionar a porta e os processos envolvidos. Só executar novamente a suíte completa depois que a causa estiver identificada e o caso focado estiver estável. `reuseExistingServer: true` pode continuar sendo usado, desde que o servidor reutilizado seja conhecido, único e válido para o workspace atual.
+
+---
+
+## L-009 — Paralelismo E2E pode distorcer loops de gameplay dependentes de frames
+
+**Quando:** validação E2E da Fase 2 — Core Combat, durante a implementação do melee jogável.
+
+**Sintoma:** com múltiplos workers, testes perdiam inputs curtos, observavam o melee somente depois de vários ciclos de ataque e falhavam de forma intermitente. Os mesmos casos passavam de forma consistente quando executados com um único worker.
+
+**Causa raiz:** múltiplas instâncias simultâneas de Three.js, WebGL e áudio causavam contenção de recursos. O espaçamento entre frames aumentava, alterando os valores observados de `deltaSeconds` e dificultando a captura de estados intermediários produzidos pelo loop em `requestAnimationFrame`.
+
+**Correção:** configurar `workers: 1` como decisão atual para esta suíte e fazer as esperas dos testes dependerem de estado observável exposto pelo jogo, em vez de sleeps arbitrários usados como fonte de sincronização.
+
+**Lição:** `workers: 1` não é uma regra universal para qualquer teste Playwright. O paralelismo só deve ser reativado quando os testes relevantes forem comprovadamente independentes de frame rate, áudio e tempo de gameplay. Em testes temporais do jogo, preferir condições sobre estado observável; sleeps podem ser usados apenas quando medem deliberadamente uma duração, não para presumir que o jogo já alcançou determinado estado.
+
+---
+
+## L-010 — Inputs E2E curtos precisam de confirmação observável do jogo
+
+**Quando:** validação E2E da Fase 2 — Core Combat, durante a integração das estações.
+
+**Sintoma:** cliques de ataque e pressionamentos de pulo ou dash falhavam de forma intermitente, embora a mecânica funcionasse quando o mesmo caso era executado isoladamente. Em algumas execuções, o teste aguardava uma consequência que nunca ocorria porque o jogo sequer havia processado o input correspondente.
+
+**Causa raiz:** chamadas curtas como `mouse.down` seguido rapidamente de `mouse.up` ou `keyboard.press` podiam começar e terminar entre dois frames do loop. Sob contenção de Three.js, WebGL e áudio, o `InputManager` não necessariamente observava o estado pressionado. Também houve uma corrida em que a troca de estação era enviada antes de o bootstrap assíncrono terminar e a estação inicial ser aplicada.
+
+**Correção:** manter a tecla ou botão pressionado até o jogo confirmar o processamento por estado observável, como contador de commit do ataque, estado de dash ou contador de pulos; liberar o input somente depois dessa confirmação. Aguardar também o estado inicial observável do jogo antes de enviar comandos dependentes de estação.
+
+**Lição:** em E2E de gameplay, o evento despachado pelo Playwright não prova que o loop consumiu o input. Inputs discretos devem receber confirmação observável do jogo; não usar sleeps curtos para presumir que um frame ocorreu. Antes de diagnosticar a mecânica, distinguir explicitamente “input não processado” de “input processado sem produzir o resultado esperado”.
+
+---
+
+## L-011 — Janelas curtas de gameplay exigem hooks DEV determinísticos e estreitos
+
+**Quando:** validação E2E da Fase 2 — Core Combat, durante a esquiva real da Samba.
+
+**Sintoma:** o teste que precisava fazer um ataque melee colidir dentro da janela Samba de 0,2s continuava intermitente mesmo com `workers: 1`, estado observável e reprodução focada. Sincronizar externamente windup, movimento do dash, colisão e expiração da janela dependia demais do espaçamento entre frames.
+
+**Causa raiz:** o teste tentou coordenar em tempo real vários sistemas móveis dentro de uma janela subsegundo sem uma preparação determinística correspondente. A observabilidade foi adicionada de forma incremental depois das falhas, e pequenas limpezas feitas após uma suíte completa verde invalidaram a validação cara e exigiram novas execuções.
+
+**Correção:** separar o teste do input que abre a janela do teste da consequência causada dentro dela e criar um hook DEV estreito que execute a própria operação de produção — no caso, resolver um melee que já esteja em `windup` pela mesma FSM e pela mesma checagem geométrica. Não duplicar lógica de dano nem expor mutação genérica da FSM. Revisar e congelar o diff antes de iniciar a suíte completa final.
+
+**Lição:** identificar janelas subsegundo antes de escrever o E2E e projetar antecipadamente a observabilidade e os controles determinísticos mínimos. Hooks de teste devem acionar contratos reais de produção, com escopo estreito, nunca reimplementar a regra testada ou permitir mutação arbitrária. Estabilizar primeiro o caso focado, revisar o diff e só então executar a suíte completa que servirá como validação final.

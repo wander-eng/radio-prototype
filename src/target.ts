@@ -1,6 +1,9 @@
 import * as THREE from 'three';
+import type { CombatHitResult, CombatTarget, CombatTargetState } from './combat-target';
+import { applyDamageToHp } from './combat-math';
 
-export class Target {
+export class Target implements CombatTarget {
+    public readonly id: string;
     public mesh: THREE.Mesh;
     private baseColor = 0xb22222;
     private flashColor = 0xffffff;
@@ -8,16 +11,17 @@ export class Target {
     private originalPosition: THREE.Vector3;
     
     // Status e Ciclo de Vida
-    public state: 'active' | 'dying' | 'dead' = 'active';
+    public state: CombatTargetState = 'active';
     public hp = 100;
-    public maxHp = 100;
+    public readonly maxHp = 100;
     private respawnTimer = 0;
 
     // HUD do Alvo
     private hpBarContainer: HTMLDivElement;
     private hpBarFill: HTMLDivElement;
 
-    constructor(position: THREE.Vector3) {
+    constructor(id: string, position: THREE.Vector3) {
+        this.id = id;
         const geometry = new THREE.BoxGeometry(1, 2, 1);
         const material = new THREE.MeshStandardMaterial({ color: this.baseColor });
         this.mesh = new THREE.Mesh(geometry, material);
@@ -35,17 +39,23 @@ export class Target {
         document.body.appendChild(this.hpBarContainer);
     }
 
-    public hit(direction: THREE.Vector3, damage: number = 10) {
-        if (this.state !== 'active') return;
+    public receiveHit(direction: THREE.Vector3, damage: number = 10): CombatHitResult {
+        if (this.state !== 'active') {
+            return { applied: false, killed: false, damageAccepted: 0 };
+        }
 
-        this.hp -= damage;
+        const result = applyDamageToHp(this.hp, damage, this.maxHp);
+        if (result.damageApplied === 0) {
+            return { applied: false, killed: false, damageAccepted: 0 };
+        }
+
+        this.hp = result.hp;
         this.updateHpBar();
 
-        if (this.hp <= 0) {
-            this.hp = 0;
+        if (result.killed) {
             this.state = 'dying';
             this.hpBarContainer.style.display = 'none'; // Esconde a barra ao morrer
-            return;
+            return { applied: true, killed: true, damageAccepted: result.damageApplied };
         }
 
         this.flashTimer = 0.1;
@@ -55,6 +65,8 @@ export class Target {
 
         const knockbackForce = direction.clone().normalize().multiplyScalar(0.8);
         this.mesh.position.add(knockbackForce);
+
+        return { applied: true, killed: false, damageAccepted: result.damageApplied };
     }
 
     public update(delta: number, camera: THREE.Camera) {

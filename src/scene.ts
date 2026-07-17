@@ -31,6 +31,17 @@ export class GameScene {
         // Chão simples e visível
         const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
         this.scene.add(gridHelper);
+
+        const arenaBoundary = new THREE.LineLoop(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-12, 0.03, -12),
+                new THREE.Vector3(12, 0.03, -12),
+                new THREE.Vector3(12, 0.03, 12),
+                new THREE.Vector3(-12, 0.03, 12)
+            ]),
+            new THREE.LineBasicMaterial({ color: 0xffaa33 })
+        );
+        this.scene.add(arenaBoundary);
     }
 
     private onWindowResize(): void {
