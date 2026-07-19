@@ -28,10 +28,7 @@ transformação.
 | --- | --- |
 | Foundation — rádio e estações | Concluída |
 | Transformation — energia e transformação | Concluída |
-| Core Combat — inimigos, dano e ciclo do encontro | Implementação concluída; playtest externo pendente |
-
-A documentação da Fase 2 prevê playtests com pelo menos dois jogadores. Eles
-ainda não foram registrados, portanto a fase não está marcada como validada.
+| Core Combat — inimigos, dano e ciclo do encontro | Concluída |
 
 ## Mecânicas implementadas
 
@@ -124,9 +121,10 @@ produção e `npm run preview` o serve localmente.
 
 1. Fundação e identidade das estações — concluída.
 2. Energia e transformação — concluída.
-3. Core Combat — implementado; playtest externo pendente.
-4. Próximas possibilidades: feedback de impacto, armas, produção visual,
-   conteúdo e experimentos de ritmo.
+3. Core Combat — concluído.
+4. Game Feel — tech spec aprovada; implementação pendente.
+5. Possibilidades posteriores: armas, produção visual, conteúdo e experimentos
+   de ritmo.
 
 O roadmap trata os itens futuros como possibilidades, não compromissos.
 
@@ -138,8 +136,6 @@ O roadmap trata os itens futuros como possibilidades, não compromissos.
 - Armas finais, chefes, conteúdo de campanha e acabamento de impacto ainda
   não foram implementados.
 - Não há trava de mira persistente.
-- O Core Combat ainda depende do playtest externo previsto em sua
-  especificação.
 
 ## Autor
 

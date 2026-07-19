@@ -324,7 +324,7 @@ continua inicializando e carregando o áudio.
 - Consolidar hooks DEV serializáveis e remover nomes de estado ambíguos.
 - Promover fluxos críticos e estáveis para E2E versionado.
 - Auditar regressões, estabilidade observável e arquivos scratch.
-- Publicar o protocolo de playtest sem antecipar seu resultado.
+- Executar e registrar resumidamente a validação manual da fase.
 - Considerar a implementação tecnicamente concluída somente com testes
   automatizados verdes; a conclusão de design continua dependendo de dois
   jogadores.
@@ -367,17 +367,42 @@ Cada fase de build deve permanecer jogável, preservar os testes existentes e se
 Os specs de `e2e/scratch/` permanecem locais para diagnóstico detalhado por
 subfase e não são dependência dos testes permanentes.
 
-## Protocolo de Playtest
-
-O roteiro e o formulário de registro vivem em
-`docs/playtests/phase-02-core-combat.md`. A sessão exige 25 minutos por
-participante: 5 minutos por estação e 10 minutos com troca livre.
+## Validação Manual
 
 Testes automatizados não respondem à pergunta “o combate continua divertido
-depois de alguns minutos?”. Em 18 de julho de 2026, o responsável pelo projeto
-confirmou a conclusão dos testes manuais e da validação, encerrando a fase.
-Esta spec registra a decisão de aceite, sem inferir participantes ou resultados
-individuais que não foram informados.
+depois de alguns minutos?”. A validação manual da fase usa diretamente os
+cenários definidos nesta spec, sem protocolo ou formulário separado.
+
+Cada sessão deve incluir:
+
+- 5 minutos somente em Phonk;
+- 5 minutos somente em Samba;
+- 5 minutos somente em Forró;
+- 10 minutos com troca livre de estação;
+- ao menos uma transformação em cada estação;
+- morte e retomada pelo botão `Reviver`;
+- uso intencional do dash de cada estação;
+- pulo e double jump como defesa;
+- combate contra ataques melee e projéteis ranged.
+
+A observação deve verificar:
+
+- quando o combate começa a parecer repetitivo;
+- se melee e ranged exigem respostas diferentes;
+- se ataques inimigos são legíveis e justos;
+- se pulo, double jump e dash são usados intencionalmente;
+- se o soft aim ajuda sem parecer mira automática;
+- se cada estação leva a decisões distintas;
+- se transformação, morte e retomada permanecem claras;
+- se há softlock, queda perceptível de performance ou estado preso.
+
+O resultado pode ser registrado resumidamente nesta spec, na conclusão da
+fase ou no PR correspondente. Não é exigido relatório separado.
+
+Em 18 de julho de 2026, o responsável pelo projeto confirmou a conclusão dos
+testes manuais e da validação, encerrando a fase. Esta spec registra a decisão
+de aceite sem inferir participantes ou resultados individuais que não foram
+informados.
 
 ## Dívidas Deliberadas
 

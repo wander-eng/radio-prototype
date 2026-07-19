@@ -20,7 +20,7 @@ Esta skill existe porque o Manifesto Criativo, sozinho, não é rígido o sufici
 | --- | --- | --- |
 | Identidade de estação (cor, som, câmera, partícula, mecânica) | `references/station.md` | ✅ Validado (Teste E aprovado) |
 | Arma por estação | `references/arma.md` | ⏳ Ainda não escrito — decisões de design não tomadas (Fase 4a do Roadmap Macro) |
-| Inimigo / IA simples | `references/inimigo.md` | ⏳ Ainda não escrito (Fase 2 do Roadmap Macro) |
+| Inimigo / IA simples | `references/inimigo.md` | ✅ Disponível — modelo validado na Fase 2 |
 | Personagem definitivo (modelo 3D com rig e animação) | `references/personagem.md` | ⏳ Ainda não escrito — nenhuma decisão de pipeline/estilo tomada (Fase 4b do Roadmap Macro) |
 | VFX genérico (fora de troca de estação) | `references/station.md` (seção de VFX) | Parcial — cobre só o VFX de troca de estação hoje |
 | HUD | Ver spec técnica da Fase 1 — Foundation | Já implementado, sem receita própria ainda |
