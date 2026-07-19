@@ -23,7 +23,7 @@ Esta skill existe porque o Manifesto Criativo, sozinho, não é rígido o sufici
 | Inimigo / IA simples | `references/inimigo.md` | ⏳ Ainda não escrito (Fase 2 do Roadmap Macro) |
 | Personagem definitivo (modelo 3D com rig e animação) | `references/personagem.md` | ⏳ Ainda não escrito — nenhuma decisão de pipeline/estilo tomada (Fase 4b do Roadmap Macro) |
 | VFX genérico (fora de troca de estação) | `references/station.md` (seção de VFX) | Parcial — cobre só o VFX de troca de estação hoje |
-| HUD | Ver spec técnica da vertical slice, Fase 5 | Já implementado, sem receita própria ainda |
+| HUD | Ver spec técnica da Fase 1 — Foundation | Já implementado, sem receita própria ainda |
 
 Se sua tarefa é sobre uma categoria sem receita ainda, **pare e escreva a spec da fase correspondente primeiro** (ver `.specs/ROADMAP.md`) — não invente a regra aqui.
 

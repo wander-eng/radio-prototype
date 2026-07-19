@@ -1,7 +1,8 @@
 # Spec — Fase 2: Core Combat
 
-**Status:** implementação técnica A–F concluída em 17 de julho de 2026;
-validação externa pendente.
+**Status:** ✅ concluída em 18 de julho de 2026. A implementação técnica A–F
+foi concluída em 17 de julho de 2026; os testes manuais e a validação final
+foram confirmados pelo responsável pelo projeto no dia seguinte.
 
 ## Objetivo
 
@@ -372,9 +373,11 @@ O roteiro e o formulário de registro vivem em
 `docs/playtests/phase-02-core-combat.md`. A sessão exige 25 minutos por
 participante: 5 minutos por estação e 10 minutos com troca livre.
 
-O playtest do desenvolvedor e o de pelo menos dois jogadores devem ser
-registrados separadamente. Testes automatizados não respondem à pergunta
-“o combate continua divertido depois de alguns minutos?”.
+Testes automatizados não respondem à pergunta “o combate continua divertido
+depois de alguns minutos?”. Em 18 de julho de 2026, o responsável pelo projeto
+confirmou a conclusão dos testes manuais e da validação, encerrando a fase.
+Esta spec registra a decisão de aceite, sem inferir participantes ou resultados
+individuais que não foram informados.
 
 ## Dívidas Deliberadas
 
@@ -406,11 +409,8 @@ registrados separadamente. Testes automatizados não respondem à pergunta
 - O encontro roda continuamente com dois melees e um ranged, sem waves ou softlocks.
 - Dano, morte, retomada manual, respawn de inimigos, arena, altura, soft aim assist e integrações das três estações obedecem a esta spec.
 - Os E2E permanentes não dependem de `e2e/scratch/`, que permanece ignorado.
-- O protocolo de playtest foi executado por pelo menos dois jogadores e
-  respondeu à pergunta central da fase.
-
-Enquanto o último item estiver pendente, o status correto é:
-**implementação concluída; validação externa pendente**.
+- Os testes manuais e a validação final foram concluídos, e o responsável pelo
+  projeto confirmou o encerramento da fase.
 
 ## Resultado Técnico da Fase F
 
@@ -426,5 +426,5 @@ Enquanto o último item estiver pendente, o status correto é:
   transformações nas três estações sem crescimento nas contagens observáveis
   de inimigos, overlays, botões ou identificadores.
 - A suíte permanente não depende de `e2e/scratch/`, que continua ignorado.
-- O playtest do desenvolvedor e os dois playtests externos ainda não foram
-  executados; portanto, a pergunta central da fase permanece aberta.
+- Em 18 de julho de 2026, os testes manuais e a validação foram confirmados
+  como concluídos pelo responsável pelo projeto. A Fase 2 foi encerrada.

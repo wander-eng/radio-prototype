@@ -3,11 +3,12 @@
 
 ## Fase atual
 
-**Fase 2 — Core Combat**
+**Nenhuma fase de implementação ativa.**
 
-Tech spec vigente:
+A **Fase 2 — Core Combat** foi concluída em 18 de julho de 2026.
 
-`docs/tech-specs/phase-02-core-combat.md`
+A próxima fase prevista é a **Fase 3 — Game Feel**, cuja tech spec ainda não
+foi escrita.
 
 ## Princípio de uso deste documento
 
@@ -49,18 +50,19 @@ Resultado validado:
 
 ---
 
-## Fase 2 — Core Combat
+## Fase 2 — Core Combat ✅ Concluída
 
 **Pergunta que essa fase responde:** o combate continua divertido depois de alguns minutos?
 
-Escopo definido na tech spec vigente:
-- Arena contínua com dois inimigos melee e um ranged
-- IA simples, telegraph, projéteis e coordenação de ataques
-- HP funcional, dano, morte e reset completo do jogador
-- Respawn individual dos inimigos
-- Double jump integrado ao combate e ataques inimigos sensíveis à altura
-- Esquiva real da Samba e ganho único de energia no dash do Forró
-- Soft aim assist estreito, sem hard lock-on
+Resultado implementado e validado:
+- ✅ Arena contínua com dois inimigos melee e um ranged
+- ✅ IA simples, telegraph, projéteis e coordenação de ataques
+- ✅ HP funcional, dano, morte e retomada manual do jogador
+- ✅ Respawn individual e reset completo do encontro
+- ✅ Double jump integrado ao combate e ataques inimigos sensíveis à altura
+- ✅ Esquiva real da Samba e ganho único de energia no dash do Forró
+- ✅ Soft aim assist estreito, sem hard lock-on
+- ✅ Testes automatizados, testes manuais e validação da fase concluídos
 
 *Nota: testar com 1-2 tipos de inimigo repetindo, não com sistema de waves — waves como progressão de dificuldade pertence à Fase 5. O feedback mínimo de acerto (knockback, destruição/respawn dos alvos) já existe da vertical slice e é suficiente para testar esta fase honestamente, sem precisar esperar a Fase 3.*
 
@@ -139,9 +141,8 @@ Objetivo: explorar ideias maiores sem comprometer o escopo principal. Categoria 
 
 ## Próximas fases
 
-1. Implementar e validar a Fase 2 — Core Combat.
-2. Escrever a tech spec da Fase 3.
-3. Implementar e validar a Fase 3 — Game Feel.
+1. Escrever a tech spec da Fase 3 — Game Feel.
+2. Implementar e validar a Fase 3.
 
 ---
 
