@@ -7,8 +7,8 @@
 
 A **Fase 2 — Core Combat** foi concluída em 18 de julho de 2026.
 
-A próxima fase prevista é a **Fase 3 — Game Feel**, cuja tech spec ainda não
-foi escrita.
+A **Fase 3 — Game Feel** já possui tech spec aprovada e aguarda o início da
+implementação.
 
 ## Princípio de uso deste documento
 
@@ -141,8 +141,7 @@ Objetivo: explorar ideias maiores sem comprometer o escopo principal. Categoria 
 
 ## Próximas fases
 
-1. Escrever a tech spec da Fase 3 — Game Feel.
-2. Implementar e validar a Fase 3.
+1. Implementar e validar a Fase 3 — Game Feel.
 
 ---
 
