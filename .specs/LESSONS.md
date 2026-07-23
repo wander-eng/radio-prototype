@@ -166,3 +166,57 @@ Você tem acesso ao histórico de commits e ao código atual deste repositório.
 **Correção:** separar o teste do input que abre a janela do teste da consequência causada dentro dela e criar um hook DEV estreito que execute a própria operação de produção — no caso, resolver um melee que já esteja em `windup` pela mesma FSM e pela mesma checagem geométrica. Não duplicar lógica de dano nem expor mutação genérica da FSM. Revisar e congelar o diff antes de iniciar a suíte completa final.
 
 **Lição:** identificar janelas subsegundo antes de escrever o E2E e projetar antecipadamente a observabilidade e os controles determinísticos mínimos. Hooks de teste devem acionar contratos reais de produção, com escopo estreito, nunca reimplementar a regra testada ou permitir mutação arbitrária. Estabilizar primeiro o caso focado, revisar o diff e só então executar a suíte completa que servirá como validação final.
+
+---
+
+## L-012 — Ações multiframe precisam de identidade e encerramento explícitos
+
+**Quando:** Builder 3A da Fase 3 — Game Feel, ao agregar os impactos do dash multialvo do Forró.
+
+**Sintoma:** uma ação resolvida ao longo de vários frames pode emitir um evento por alvo, perder resultados intermediários ou não ter um instante claro para publicar seu resultado global.
+
+**Causa raiz:** diferentemente de um ataque instantâneo, uma ação multiframe não possui naturalmente um único ponto de resolução; início, coleta de resultados e encerramento acontecem em momentos diferentes.
+
+**Correção:** criar o identificador no início da ação, acumular apenas os resultados aceitos e emitir um único evento ao atingir seu encerramento lógico, limpando depois o estado acumulado.
+
+**Lição:** toda ação multiframe que produz um resultado agregado deve possuir identidade, fronteira de início e condição explícita de encerramento.
+
+**Aplicar quando:** dashes, canais, projéteis persistentes ou outras ações coletarem resultados em mais de um frame.
+
+**Não aplicar quando:** a ação for instantânea e possuir exatamente um ponto de resolução.
+
+---
+
+## L-013 — E2E valida wiring e comportamento exclusivo do runtime, não matrizes de regras puras
+
+**Quando:** Builder 3A da Fase 3 — Game Feel, ao validar classificação e observabilidade de impactos.
+
+**Sintoma:** regras determinísticas já cobertas por testes unitários exigiram preparação de cena, inimigos, inputs e janelas temporais no navegador, aumentando custo e fragilidade sem acrescentar garantia exclusiva proporcional.
+
+**Causa raiz:** a matriz de classificação pura foi repetida no E2E em vez de reservar o navegador para confirmar a integração entre produção, loop e `window.__GAME_STATE__`.
+
+**Correção:** manter combinações, prioridades e casos-limite em testes unitários; usar E2E somente para provar o wiring real e comportamentos que dependem do navegador, do loop, do input ou da integração WebGL.
+
+**Lição:** cada nível de teste deve cobrir a garantia mais barata capaz de detectar a falha; E2E não deve duplicar integralmente regras puras já verificadas.
+
+**Aplicar quando:** classificadores, clamps, prioridades e composição matemática puderem ser testados sem runtime, preservando no E2E apenas a integração indispensável.
+
+**Não aplicar quando:** a falha só puder existir no DOM, input real, loop de frames, áudio, WebGL ou composição completa dos sistemas.
+
+---
+
+## L-014 — Prompts de builders aprovados devem referenciar a tech spec, não republicá-la
+
+**Quando:** planejamento e execução do Builder 3A da Fase 3 — Game Feel.
+
+**Sintoma:** o prompt repetiu contratos, hierarquia, arquitetura, casos de teste e regras globais já registrados na tech spec e nos documentos obrigatórios, ampliando leitura e contexto sem introduzir decisões novas.
+
+**Causa raiz:** a instrução operacional foi tratada como uma segunda especificação completa, em vez de apontar a seção vigente e registrar apenas objetivo, desvios e critérios específicos da execução.
+
+**Correção:** prompts de builders com tech spec aprovada devem indicar a fonte principal, delimitar objetivo e fora de escopo, destacar decisões novas e pedir validação proporcional, sem copiar novamente o conteúdo integral.
+
+**Lição:** manter uma única fonte detalhada de verdade reduz contexto duplicado e preserva clareza sem diminuir os critérios de qualidade.
+
+**Aplicar quando:** o builder já estiver definido de forma suficiente por uma tech spec aprovada e vigente.
+
+**Não aplicar quando:** não houver spec, existir contradição relevante ou a tarefa introduzir uma decisão nova que ainda precise ser explicitada.
