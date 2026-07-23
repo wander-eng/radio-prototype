@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UIManager } from './hud';
 import { EncounterController } from './encounter-controller';
+import { createImpactActionIdSource, type ImpactEvent } from './impact-event';
 import { Player } from './player';
 
 function createElementStub() {
@@ -94,5 +95,36 @@ describe('EncounterController reset', () => {
 
         expect(encounter.snapshot()).toEqual(beforeDeath);
         expect(player.isDead).toBe(true);
+    });
+
+    it('forwards one accepted melee result and ignores the next global-invulnerability result', () => {
+        const player = createPlayer();
+        const events: ImpactEvent[] = [];
+        const encounter = new EncounterController(new THREE.Scene(), player, {
+            nextActionId: createImpactActionIdSource(100),
+            emit: (event) => events.push(event),
+            getContext: () => ({ station: 'phonk', transformed: true })
+        });
+        const camera = new THREE.PerspectiveCamera();
+
+        encounter.setEnemyPosition('melee_0', 0, 1, 5);
+        encounter.setEnemyPosition('melee_1', 12, 1, 12);
+        encounter.update(0, camera);
+        expect(encounter.resolvePendingMeleeAttack('melee_0')).toBe(true);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            actionId: 101,
+            kind: 'player-damaged',
+            source: 'melee',
+            station: 'phonk',
+            transformed: true,
+            targets: [{ targetId: 'player', damageAccepted: 20 }]
+        });
+
+        encounter.setEnemyPosition('melee_1', 0, 1, 5);
+        encounter.update(0, camera);
+        expect(encounter.resolvePendingMeleeAttack('melee_1')).toBe(true);
+        expect(events).toHaveLength(1);
+        expect(player.hp).toBe(80);
     });
 });

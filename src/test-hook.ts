@@ -1,6 +1,7 @@
 import type { Player } from './player';
 import type { CombatTarget } from './combat-target';
 import type { EncounterSnapshot } from './encounter-controller';
+import type { ImpactEvent, ImpactKind } from './impact-event';
 import { StationId } from './radio';
 import type { RadioSystem } from './radio';
 
@@ -27,6 +28,9 @@ export interface GameState {
     lastCommittedAimSource: 'direct' | 'assisted' | 'none';
     lastCommittedAimTargetId: string | null;
     attackCommitCount: number;
+    lastImpactKind: ImpactKind | null;
+    lastImpactActionId: number | null;
+    lastImpact: ImpactEvent | null;
     player: {
         x: number;
         y: number;
@@ -71,6 +75,7 @@ export interface GameTestControls {
     advanceTransformation(deltaSeconds: number): void;
     setPlayerPosition(x: number, y: number, z: number): void;
     setEnemyPosition(id: string, x: number, y: number, z: number): void;
+    setCombatTargetPosition(id: string, x: number, y: number, z: number): void;
     spawnProjectileAtPlayer(x: number, y: number, z: number): void;
     damagePlayer(damage: number): void;
     revivePlayer(): Promise<void>;
@@ -79,6 +84,8 @@ export interface GameTestControls {
     resetEncounter(): void;
     setEnemyHp(id: string, hp: number): void;
     openSambaDodgeWindow(): void;
+    prepareSambaCounter(): void;
+    resolvePlayerAttack(): boolean;
     resolvePendingMeleeAttack(id: string): boolean;
 }
 
@@ -99,7 +106,8 @@ export function updateGameState(
     radioSystem: RadioSystem,
     targets: readonly CombatTarget[],
     encounter: EncounterSnapshot,
-    transformationState: ObservableTransformationState
+    transformationState: ObservableTransformationState,
+    lastImpact: ImpactEvent | null = null
 ) {
     if (!import.meta.env.DEV) return;
 
@@ -131,6 +139,9 @@ export function updateGameState(
         lastCommittedAimSource: player.lastCommittedAimSource,
         lastCommittedAimTargetId: player.lastCommittedAimTargetId,
         attackCommitCount: player.attackCommitCount,
+        lastImpactKind: lastImpact?.kind ?? null,
+        lastImpactActionId: lastImpact?.actionId ?? null,
+        lastImpact,
         player: {
             x: player.mesh.position.x,
             y: player.mesh.position.y,

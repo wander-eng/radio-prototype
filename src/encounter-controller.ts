@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import type { CombatTarget } from './combat-target';
 import { EnemyProjectile } from './enemy-projectile';
+import {
+    createLocalImpactDependencies,
+    type ImpactEventDependencies
+} from './impact-event';
 import { MeleeAttackToken } from './melee-attack-token';
 import { MeleeEnemy } from './melee-enemy';
 import { clampArenaPosition, horizontalDistance, separatePositionXZ } from './melee-math';
@@ -44,17 +48,20 @@ export class EncounterController {
     private readonly activeProjectiles: EnemyProjectile[] = [];
     private readonly scene: THREE.Scene;
     private readonly player: Player;
+    private readonly impact: ImpactEventDependencies;
     private projectileSequence = 0;
 
     constructor(
         scene: THREE.Scene,
-        player: Player
+        player: Player,
+        impactDependencies: Partial<ImpactEventDependencies> = {}
     ) {
         this.scene = scene;
         this.player = player;
+        this.impact = createLocalImpactDependencies(impactDependencies);
         this.melees = [
-            new MeleeEnemy('melee_0', new THREE.Vector3(-3, 1, -3), this.meleeToken, -1),
-            new MeleeEnemy('melee_1', new THREE.Vector3(3, 1, -3), this.meleeToken, 1)
+            new MeleeEnemy('melee_0', new THREE.Vector3(-3, 1, -3), this.meleeToken, -1, this.impact),
+            new MeleeEnemy('melee_1', new THREE.Vector3(3, 1, -3), this.meleeToken, 1, this.impact)
         ];
         this.ranged = new RangedEnemy(
             'ranged_0',
@@ -99,7 +106,9 @@ export class EncounterController {
         const projectile = new EnemyProjectile(
             `projectile_${this.projectileSequence++}`,
             origin,
-            new THREE.Vector3(direction.x, direction.y, direction.z)
+            new THREE.Vector3(direction.x, direction.y, direction.z),
+            this.impact.nextActionId(),
+            this.impact
         );
         this.activeProjectiles.push(projectile);
         this.scene.add(projectile.mesh);

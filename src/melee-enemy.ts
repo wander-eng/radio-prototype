@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import type { CombatHitResult, CombatTarget, CombatTargetState } from './combat-target';
 import { applyDamageToHp } from './combat-math';
 import {
+    createLocalImpactDependencies,
+    type ImpactEventDependencies
+} from './impact-event';
+import { createPlayerAttackImpactEvent } from './impact-math';
+import {
     advanceMeleeState,
     clampArenaPosition,
     horizontalDistance,
@@ -41,17 +46,21 @@ export class MeleeEnemy implements CombatTarget {
     private readonly hpBarFill: HTMLDivElement;
     private readonly attackToken: MeleeAttackToken;
     private readonly coordinationDirection: -1 | 1;
+    private readonly impact: ImpactEventDependencies;
+    private currentAttackActionId: number | null = null;
 
     constructor(
         id: string,
         spawnPosition: THREE.Vector3,
         attackToken: MeleeAttackToken,
-        coordinationDirection: -1 | 1
+        coordinationDirection: -1 | 1,
+        impactDependencies: Partial<ImpactEventDependencies> = {}
     ) {
         this.id = id;
         this.spawnPosition = spawnPosition.clone();
         this.attackToken = attackToken;
         this.coordinationDirection = coordinationDirection;
+        this.impact = createLocalImpactDependencies(impactDependencies);
 
         this.material = new THREE.MeshStandardMaterial({ color: this.baseColor });
         this.mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), this.material);
@@ -104,6 +113,7 @@ export class MeleeEnemy implements CombatTarget {
 
         if (result.killed) {
             this.attackToken.release(this.id);
+            this.currentAttackActionId = null;
             this.state = 'dying';
             this.meleeState = 'dying';
             this.stateTimer = MELEE_DYING_SECONDS;
@@ -158,6 +168,7 @@ export class MeleeEnemy implements CombatTarget {
         this.stateTimer = 0;
         this.flashTimer = 0;
         this.attackResolutionCount = 0;
+        this.currentAttackActionId = null;
         this.mesh.visible = true;
         this.mesh.scale.set(1, 1, 1);
         this.mesh.position.set(snapshot.position.x, snapshot.position.y, snapshot.position.z);
@@ -207,9 +218,28 @@ export class MeleeEnemy implements CombatTarget {
                 MELEE_ATTACK_RANGE,
                 MELEE_VERTICAL_TOLERANCE
             )) {
-                player.receiveAttack(MELEE_ATTACK_DAMAGE);
+                const origin = this.mesh.position.clone();
+                const direction = player.mesh.position.clone().sub(origin);
+                direction.y = 0;
+                if (direction.lengthSq() > 0) direction.normalize();
+                const result = player.receiveAttack(MELEE_ATTACK_DAMAGE);
+                const event = createPlayerAttackImpactEvent({
+                    actionId: this.currentAttackActionId ?? this.impact.nextActionId(),
+                    source: 'melee',
+                    context: this.impact.getContext(),
+                    origin: { x: origin.x, y: origin.y, z: origin.z },
+                    direction: { x: direction.x, y: direction.y, z: direction.z },
+                    playerPosition: {
+                        x: player.mesh.position.x,
+                        y: player.mesh.position.y,
+                        z: player.mesh.position.z
+                    },
+                    result
+                });
+                if (event) this.impact.emit(event);
             }
         }
+        this.currentAttackActionId = null;
         this.enterState(transition.state, transition.timer);
         this.attackToken.release(this.id);
     }
@@ -248,6 +278,7 @@ export class MeleeEnemy implements CombatTarget {
 
     private tryStartWindup(): boolean {
         if (!this.attackToken.tryAcquire(this.id)) return false;
+        this.currentAttackActionId = this.impact.nextActionId();
         const transition = advanceMeleeState('chase', 0, 0, true);
         this.enterState(transition.state, transition.timer);
         return true;

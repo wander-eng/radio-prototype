@@ -21,6 +21,12 @@ import {
 } from './combat-math';
 import { clampArenaPosition } from './melee-math';
 import { createTimeStep, updateSlowMotionTimer } from './station-combat-math';
+import {
+    createImpactActionIdSource,
+    ImpactEventStore,
+    type ImpactEventDependencies,
+    type ImpactStation
+} from './impact-event';
 
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
@@ -39,7 +45,28 @@ let energy = 0;
 let transformed = false;
 let timeScale = 1;
 let slowMoTimer = 0;
+const impactEventStore = new ImpactEventStore();
+let radioSystem: RadioSystem;
 hudManager.updateEnergy(energy);
+
+const toImpactStation = (station: StationId | null): ImpactStation => {
+    if (station === StationId.PHONK) return 'phonk';
+    if (station === StationId.SAMBA) return 'samba';
+    if (station === StationId.FORRO) return 'forro';
+    return null;
+};
+
+const nextImpactActionId = createImpactActionIdSource();
+const impactDependencies: ImpactEventDependencies = {
+    nextActionId: nextImpactActionId,
+    emit: (event) => {
+        impactEventStore.record(event);
+    },
+    getContext: () => ({
+        station: toImpactStation(radioSystem.currentStation),
+        transformed
+    })
+};
 
 const beginSambaSlowMotion = () => {
     timeScale = 0.5;
@@ -60,7 +87,12 @@ const addEnergyForAttack = (successfulHitCount: number) => {
     setEnergy(clampEnergy(energy, gain));
 };
 
-const player = new Player(hudManager, addEnergyForAttack, beginSambaSlowMotion);
+const player = new Player(
+    hudManager,
+    addEnergyForAttack,
+    beginSambaSlowMotion,
+    impactDependencies
+);
 gameScene.scene.add(player.mesh);
 
 const staticTargets: Target[] = [
@@ -68,12 +100,12 @@ const staticTargets: Target[] = [
     new Target('target_1', new THREE.Vector3(-1.5, 0, -4.5))
 ];
 staticTargets.forEach(target => gameScene.scene.add(target.mesh));
-const encounter = new EncounterController(gameScene.scene, player);
+const encounter = new EncounterController(gameScene.scene, player, impactDependencies);
 const targets: CombatTarget[] = [...staticTargets, ...encounter.combatTargets];
 
 const audioManager = new AudioManager();
 const effectsManager = new EffectsManager(gameScene.scene, cameraSystem);
-const radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
+radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
 
 const tryActivateTransformation = () => {
     if (transformed || !radioSystem.currentStation || !canTransform(energy)) return;
@@ -124,6 +156,7 @@ const revivePlayer = async () => {
     resetPlayerSystemsForDeath();
     encounter.reset();
     player.resetAfterDeath();
+    impactEventStore.reset();
     await waitForPresentationFrame();
     hudManager.completeDeathRevive();
     deathLifecycleActive = false;
@@ -134,6 +167,7 @@ const resetEncounterImmediately = () => {
     resetPlayerSystemsForDeath();
     encounter.reset();
     player.resetAfterDeath();
+    impactEventStore.reset();
     hudManager.completeDeathRevive();
     deathLifecycleActive = false;
     reviveInProgress = false;
@@ -162,6 +196,12 @@ installGameTestControls({
     advanceTransformation: (deltaSeconds) => updateTransformation(Math.max(0, deltaSeconds)),
     setPlayerPosition: (x, y, z) => player.mesh.position.set(x, y, z),
     setEnemyPosition: (id, x, y, z) => encounter.setEnemyPosition(id, x, y, z),
+    setCombatTargetPosition: (id, x, y, z) => {
+        const target = targets.find(candidate => candidate.id === id);
+        if (!target) return;
+        const clamped = clampArenaPosition({ x, z });
+        target.mesh.position.set(clamped.x, y, clamped.z);
+    },
     spawnProjectileAtPlayer: (x, y, z) => encounter.spawnProjectile(
         new THREE.Vector3(x, y, z),
         player.mesh.position.clone()
@@ -178,6 +218,10 @@ installGameTestControls({
     getEncounterSnapshot: () => encounter.snapshot(),
     resetEncounter: resetEncounterImmediately,
     openSambaDodgeWindow: () => player.openSambaDodgeWindow(),
+    prepareSambaCounter: () => player.openSambaDashWindows(),
+    resolvePlayerAttack: () => radioSystem.currentStation
+        ? player.resolveCommittedAttack(radioSystem.currentStation, targets)
+        : false,
     resolvePendingMeleeAttack: (id) => encounter.resolvePendingMeleeAttack(id),
     setEnemyHp: (id, hp) => {
         const target = targets.find(candidate => candidate.id === id);
@@ -254,7 +298,7 @@ const publishGameState = (encounterStatus: 'active' | 'paused' | 'awaiting-reviv
         reviveInProgress,
         reviveCount,
         encounterFrozen: hudManager.isPaused || deathLifecycleActive
-    });
+    }, impactEventStore.lastImpact);
 };
 
 function animate() {

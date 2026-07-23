@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayerAttackDecision } from './combat-math';
 import { EnemyProjectile } from './enemy-projectile';
+import { createImpactActionIdSource, type ImpactEvent } from './impact-event';
 import type { Player } from './player';
 
 function createPlayerMock(
@@ -70,5 +71,63 @@ describe('EnemyProjectile impact integration', () => {
 
         expect(projectile.tryHit(player)).toBe(false);
         expect(projectile.consumed).toBe(false);
+    });
+
+    it.each([
+        ['damage-applied', 'player-damaged'],
+        ['dodged-samba', 'samba-dodge']
+    ] as const)('emits %s as one %s event', (outcome, expectedKind) => {
+        const events: ImpactEvent[] = [];
+        const projectile = new EnemyProjectile(
+            'projectile_impact',
+            new THREE.Vector3(0, 1, -1),
+            new THREE.Vector3(0, 0, 1),
+            undefined,
+            {
+                nextActionId: createImpactActionIdSource(10),
+                emit: (event) => events.push(event),
+                getContext: () => ({ station: 'samba', transformed: false })
+            }
+        );
+        const player = createPlayerMock(new THREE.Vector3(0, 1, -1), {
+            ...acceptedAttack,
+            hp: outcome === 'damage-applied' ? 85 : 100,
+            damageApplied: outcome === 'damage-applied' ? 15 : 0,
+            outcome,
+            dodgedBySamba: outcome === 'dodged-samba'
+        });
+
+        expect(projectile.tryHit(player)).toBe(true);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            actionId: 11,
+            kind: expectedKind,
+            source: 'projectile',
+            station: 'samba',
+            targets: [{ targetId: 'player' }]
+        });
+    });
+
+    it('consumes global invulnerability without emitting an impact', () => {
+        const emit = vi.fn();
+        const projectile = new EnemyProjectile(
+            'projectile_ignored',
+            new THREE.Vector3(0, 1, 0),
+            new THREE.Vector3(0, 0, 1),
+            4,
+            { emit }
+        );
+        const player = createPlayerMock(new THREE.Vector3(0, 1, 0), {
+            ...acceptedAttack,
+            hp: 100,
+            damageApplied: 0,
+            outcome: 'ignored-global-invulnerability',
+            ignoredByInvulnerability: true,
+            threatConsumed: true
+        });
+
+        expect(projectile.tryHit(player)).toBe(true);
+        expect(projectile.consumed).toBe(true);
+        expect(emit).not.toHaveBeenCalled();
     });
 });
