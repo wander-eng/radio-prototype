@@ -29,6 +29,7 @@ transformação.
 | Foundation — rádio e estações | Concluída |
 | Transformation — energia e transformação | Concluída |
 | Core Combat — inimigos, dano e ciclo do encontro | Concluída |
+| Game Feel — impacto, reação, áudio e identidade sensorial | Concluída |
 
 ## Mecânicas implementadas
 
@@ -39,6 +40,7 @@ transformação.
 - Sinalização dos ataques, HP, dano, invulnerabilidade e respawn individual.
 - Evasão vertical de ataques inimigos.
 - Energia, aura e transformação por estação.
+- Hitstop, flash, knockback, camera shake, sparks e áudio sintético de impacto.
 - Morte com encontro congelado e retomada manual pelo botão `Reviver`.
 - HUD provisório, pausa e transições de áudio entre estações.
 
@@ -93,8 +95,9 @@ O código está organizado por responsabilidades e por sistemas do jogo:
 
 Há testes unitários com Vitest para cálculos de combate, estados dos inimigos,
 áudio, HUD, jogador e reset do encontro. Os testes E2E versionados com
-Playwright cobrem os fluxos principais da fundação e do Core Combat. Casos
-temporários de desenvolvimento ficam em `e2e/scratch/`, fora do versionamento.
+Playwright cobrem os fluxos principais da fundação, do Core Combat e do Game
+Feel. Casos temporários de desenvolvimento ficam em `e2e/scratch/`, fora do
+versionamento.
 
 ```bash
 npm test
@@ -122,8 +125,9 @@ produção e `npm run preview` o serve localmente.
 1. Fundação e identidade das estações — concluída.
 2. Energia e transformação — concluída.
 3. Core Combat — concluído.
-4. Game Feel — tech spec aprovada; implementação pendente.
-5. Possibilidades posteriores: armas, produção visual, conteúdo e experimentos
+4. Game Feel — concluído.
+5. Aprimoramentos de dash por estação — próxima fase planejada.
+6. Possibilidades posteriores: armas, produção visual, conteúdo e experimentos
    de ritmo.
 
 O roadmap trata os itens futuros como possibilidades, não compromissos.
