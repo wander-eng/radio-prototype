@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import type { UIManager } from './hud';
 import type { InputManager } from './input';
+import type { CombatHitResult, CombatTarget } from './combat-target';
+import type { ImpactEvent } from './impact-event';
+import { createImpactActionIdSource } from './impact-event';
 import { Player } from './player';
 import { StationId } from './radio';
 
@@ -25,6 +28,36 @@ function createInputMock(pressed: string[] = []) {
 
 function createCamera() {
     return new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 1000);
+}
+
+function createCombatTarget(
+    id: string,
+    position: THREE.Vector3,
+    result: CombatHitResult = { applied: true, killed: false, damageAccepted: 10 }
+): CombatTarget {
+    const mesh = new THREE.Object3D();
+    mesh.position.copy(position);
+    return {
+        id,
+        mesh,
+        hp: 50,
+        maxHp: 50,
+        state: 'active',
+        receiveHit: vi.fn(() => result)
+    } as CombatTarget & { mesh: THREE.Object3D };
+}
+
+function createImpactPlayer(events: ImpactEvent[], transformed: boolean = false) {
+    return new Player(
+        createHudMock(),
+        vi.fn(),
+        vi.fn(),
+        {
+            nextActionId: createImpactActionIdSource(),
+            emit: (event) => events.push(event),
+            getContext: () => ({ station: 'forro', transformed })
+        }
+    );
 }
 
 describe('Player damage foundation', () => {
@@ -211,5 +244,77 @@ describe('Player Samba integration', () => {
         expect(player.sambaCounterRemaining).toBeCloseTo(0.6);
         player.update(0.6, createInputMock(), camera, [], StationId.SAMBA, []);
         expect(player.sambaCounterReady).toBe(false);
+    });
+});
+
+describe('Player impact aggregation', () => {
+    it('emits one serializable miss event for a committed basic attack without targets', () => {
+        const events: ImpactEvent[] = [];
+        const player = createImpactPlayer(events);
+        const input = createInputMock(['MouseLeft']);
+
+        player.update(0, input, createCamera(), [], StationId.PHONK, []);
+        player.update(0.1, input, createCamera(), [], StationId.PHONK, []);
+
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            actionId: 1,
+            kind: 'miss',
+            source: 'basic-attack',
+            station: 'phonk',
+            transformed: false,
+            targets: []
+        });
+        expect(() => JSON.stringify(events[0])).not.toThrow();
+    });
+
+    it('aggregates every accepted Forro target into one global action', () => {
+        const events: ImpactEvent[] = [];
+        const player = createImpactPlayer(events);
+        const first = createCombatTarget('enemy_a', new THREE.Vector3(0, 1, 5.5));
+        const second = createCombatTarget('enemy_b', new THREE.Vector3(0.5, 1, 5.5));
+        first.mesh.position.set(0, 1, 5.5);
+        second.mesh.position.set(0.5, 1, 5.5);
+        const input = createInputMock(['MouseLeft']);
+
+        player.update(0, input, createCamera(), [first, second], StationId.FORRO, []);
+        player.update(0.1, input, createCamera(), [first, second], StationId.FORRO, []);
+
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            actionId: 1,
+            kind: 'forro-multi',
+            source: 'basic-attack',
+            targets: [
+                { targetId: 'enemy_a', damageAccepted: 10 },
+                { targetId: 'enemy_b', damageAccepted: 10 }
+            ]
+        });
+    });
+
+    it('emits one Forro dash event only after all targets in the action were collected', () => {
+        const events: ImpactEvent[] = [];
+        const player = createImpactPlayer(events, true);
+        const first = createCombatTarget('enemy_a', new THREE.Vector3(0, 1, 4));
+        const second = createCombatTarget('enemy_b', new THREE.Vector3(0.5, 1, 4));
+        first.mesh.position.set(0, 1, 4);
+        second.mesh.position.set(0.5, 1, 4);
+        const camera = createCamera();
+
+        player.update(0, createInputMock(), camera, [first, second], StationId.FORRO, []);
+        player.update(0, createInputMock(['ShiftLeft']), camera, [first, second], StationId.FORRO, []);
+        player.update(0.05, createInputMock(), camera, [first, second], StationId.FORRO, []);
+        expect(events).toHaveLength(0);
+        player.update(0.1, createInputMock(), camera, [first, second], StationId.FORRO, []);
+
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            actionId: 1,
+            kind: 'forro-multi',
+            source: 'forro-dash',
+            station: 'forro',
+            transformed: true
+        });
+        expect(events[0].targets).toHaveLength(2);
     });
 });

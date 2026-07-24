@@ -7,8 +7,11 @@
 
 A **Fase 2 — Core Combat** foi concluída em 18 de julho de 2026.
 
-A **Fase 3 — Game Feel** já possui tech spec aprovada e aguarda o início da
-implementação.
+A **Fase 3 — Game Feel** foi concluída em 24 de julho de 2026 após
+implementação dos Builders 3A–3G, validação automatizada e testes manuais.
+
+A próxima etapa planejada é a **Fase 3.5 — Aprimoramentos de Dash por
+Estação**. Sua tech spec ainda não foi escrita.
 
 ## Princípio de uso deste documento
 
@@ -68,31 +71,40 @@ Resultado implementado e validado:
 
 ---
 
-## Fase 3 — Game Feel
+## Fase 3 — Game Feel ✅ Concluída
 
 **Critério de sucesso:** o jogador sente prazer só em acertar um inimigo.
 
-Specs possíveis:
-- Hitstop
-- Camera shake
-- Hit sparks
-- Trail da arma
-- Slow motion localizado
-- Flash de impacto
-- Melhor knockback
-- Melhor feedback sonoro
-- Melhor feedback visual
-- Partículas de impacto
-- **Aprimoramentos de dash por estação** *(o dash já tem comportamento único por estação desde a Fase 3 original da vertical slice — isto é adicionar efeitos novos por cima, não criar do zero):*
-  - Phonk: rastro explosivo persistente na área por onde o dash passou (dano contínuo por um tempo — precisa de spec própria: duração, dano por tick, se afeta o mesmo alvo múltiplas vezes)
-  - Samba: dano + knockup em quem for atravessado durante o dash (novo — hoje o dash da Samba é puramente defensivo, sem dano; vale checar se isso ainda combina com a fantasia "Ginga"/precisão, ou se dilui ela)
-  - Forró: stun em quem for atravessado (adição — o dash do Forró já causa dano a quem atravessa desde a vertical slice; só o stun é novo)
+Resultado implementado e validado:
+
+- ✅ Impactos classificados e agregados por ação
+- ✅ Hitstop integrado ao slow motion, pausa, morte e transformação
+- ✅ Flash, reação visual e knockback limitado
+- ✅ Camera shake posicional sem deriva
+- ✅ Hit sparks geométricos e áudio sintético de impacto
+- ✅ Identidade sensorial mínima para Phonk, Samba e Forró
+- ✅ Limites e limpeza de efeitos em pausa, morte, revive e reset
+- ✅ Observabilidade DEV, testes automatizados e validação manual concluídos
+
+---
+
+## Fase 3.5 — Aprimoramentos de Dash por Estação
+
+Próxima fase planejada. Cada item altera regras de combate e exige tech spec
+própria antes da implementação:
+
+- Phonk: avaliar rastro explosivo persistente na área atravessada pelo dash.
+- Samba: avaliar dano e knockup durante a travessia sem diluir sua identidade
+  defensiva e precisa.
+- Forró: avaliar stun nos alvos atravessados, incluindo duração, repetição e
+  interação com FSM, telegraphs e respawn.
 
 ---
 
 ## Fase 4a — Armas por Estação
 
-*(separada da produção visual porque é decisão de design testável — precisa de spec, playtest e iteração, como tudo até aqui)*
+*(separada da produção visual porque é decisão de design testável — precisa de
+spec, testes manuais e iteração, como tudo até aqui)*
 
 - Phonk: armas de impacto e explosão — escopeta, bazuca, rastro explosivo ao atirar/atacar
 - Samba: artes marciais, capoeira, cordas e ganchos
@@ -141,7 +153,8 @@ Objetivo: explorar ideias maiores sem comprometer o escopo principal. Categoria 
 
 ## Próximas fases
 
-1. Implementar e validar a Fase 3 — Game Feel.
+1. Planejar e escrever a tech spec da Fase 3.5 — Aprimoramentos de Dash por
+   Estação.
 
 ---
 

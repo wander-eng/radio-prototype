@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import type { Player } from './player';
 import {
+    createLocalImpactDependencies,
+    type ImpactEventDependencies
+} from './impact-event';
+import { createPlayerAttackImpactEvent } from './impact-math';
+import {
     advanceProjectile,
     PROJECTILE_DAMAGE,
     PROJECTILE_MAX_LIFE_SECONDS,
@@ -17,13 +22,21 @@ export class EnemyProjectile {
     public readonly direction: THREE.Vector3;
     public remainingLife = PROJECTILE_MAX_LIFE_SECONDS;
     public consumed = false;
+    private readonly actionId: number;
+    private readonly origin: THREE.Vector3;
+    private readonly impact: ImpactEventDependencies;
 
     constructor(
         id: string,
         origin: THREE.Vector3,
-        direction: THREE.Vector3
+        direction: THREE.Vector3,
+        actionId?: number,
+        impactDependencies: Partial<ImpactEventDependencies> = {}
     ) {
         this.id = id;
+        this.impact = createLocalImpactDependencies(impactDependencies);
+        this.actionId = actionId ?? this.impact.nextActionId();
+        this.origin = origin.clone();
         this.direction = direction.clone().normalize();
         this.mesh = new THREE.Mesh(
             new THREE.SphereGeometry(PROJECTILE_RADIUS, 12, 8),
@@ -59,6 +72,28 @@ export class EnemyProjectile {
 
         const result = player.receiveAttack(PROJECTILE_DAMAGE);
         if (!result.threatConsumed) return false;
+        const event = createPlayerAttackImpactEvent({
+            actionId: this.actionId,
+            source: 'projectile',
+            context: this.impact.getContext(),
+            origin: {
+                x: this.origin.x,
+                y: this.origin.y,
+                z: this.origin.z
+            },
+            direction: {
+                x: this.direction.x,
+                y: this.direction.y,
+                z: this.direction.z
+            },
+            playerPosition: {
+                x: player.mesh.position.x,
+                y: player.mesh.position.y,
+                z: player.mesh.position.z
+            },
+            result
+        });
+        if (event) this.impact.emit(event);
         this.consumed = true;
         return true;
     }

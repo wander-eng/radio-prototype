@@ -1,13 +1,19 @@
 import * as THREE from 'three';
 import type { CombatHitResult, CombatTarget, CombatTargetState } from './combat-target';
 import { applyDamageToHp } from './combat-math';
+import type { ImpactEvent, ImpactTargetResult } from './impact-event';
+import {
+    clampReactionPosition,
+    LocalImpactReaction,
+    type ImpactReactive,
+    type ImpactReactionSnapshot
+} from './impact-reaction';
 
-export class Target implements CombatTarget {
+export class Target implements CombatTarget, ImpactReactive {
     public readonly id: string;
     public mesh: THREE.Mesh;
     private baseColor = 0xb22222;
-    private flashColor = 0xffffff;
-    private flashTimer = 0;
+    private readonly impactReaction = new LocalImpactReaction();
     private originalPosition: THREE.Vector3;
     
     // Status e Ciclo de Vida
@@ -39,7 +45,7 @@ export class Target implements CombatTarget {
         document.body.appendChild(this.hpBarContainer);
     }
 
-    public receiveHit(direction: THREE.Vector3, damage: number = 10): CombatHitResult {
+    public receiveHit(_direction: THREE.Vector3, damage: number = 10): CombatHitResult {
         if (this.state !== 'active') {
             return { applied: false, killed: false, damageAccepted: 0 };
         }
@@ -58,15 +64,40 @@ export class Target implements CombatTarget {
             return { applied: true, killed: true, damageAccepted: result.damageApplied };
         }
 
-        this.flashTimer = 0.1;
-        const material = this.mesh.material as THREE.MeshStandardMaterial;
-        material.color.setHex(this.flashColor);
-        material.emissive.setHex(0x555555);
-
-        const knockbackForce = direction.clone().normalize().multiplyScalar(0.8);
-        this.mesh.position.add(knockbackForce);
-
         return { applied: true, killed: false, damageAccepted: result.damageApplied };
+    }
+
+    public get impactReactionSnapshot(): ImpactReactionSnapshot {
+        return this.impactReaction.snapshot;
+    }
+
+    public applyImpactReaction(event: ImpactEvent, target: ImpactTargetResult) {
+        if (target.targetId !== this.id || target.damageAccepted <= 0) return;
+        this.impactReaction.trigger(event, true);
+        this.applyLogicalAppearance();
+    }
+
+    public updateImpactReaction(
+        presentationDeltaSeconds: number,
+        gameplayDeltaSeconds: number
+    ) {
+        const displacement = this.impactReaction.update(
+            presentationDeltaSeconds,
+            gameplayDeltaSeconds
+        );
+        const nextPosition = clampReactionPosition({
+            x: this.mesh.position.x + displacement.x,
+            y: this.mesh.position.y,
+            z: this.mesh.position.z + displacement.z
+        });
+        this.mesh.position.set(nextPosition.x, nextPosition.y, nextPosition.z);
+        this.applyLogicalAppearance();
+        return displacement;
+    }
+
+    public resetImpactReaction() {
+        this.impactReaction.reset();
+        this.applyLogicalAppearance();
     }
 
     public update(delta: number, camera: THREE.Camera) {
@@ -104,25 +135,37 @@ export class Target implements CombatTarget {
             this.hpBarContainer.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
         }
 
-        if (this.flashTimer > 0) {
-            this.flashTimer -= delta;
-            if (this.flashTimer <= 0) {
-                const material = this.mesh.material as THREE.MeshStandardMaterial;
-                material.color.setHex(this.baseColor);
-                material.emissive.setHex(0x000000);
-            }
+        if (!this.impactReactionSnapshot.knockbackActive) {
+            this.mesh.position.lerp(this.originalPosition, 3 * delta);
         }
-        
-        this.mesh.position.lerp(this.originalPosition, 3 * delta);
     }
 
     private respawn() {
+        this.resetImpactReaction();
         this.state = 'active';
         this.hp = this.maxHp;
         this.mesh.visible = true;
         this.mesh.scale.set(1, 1, 1);
         this.mesh.position.copy(this.originalPosition);
         this.updateHpBar();
+    }
+
+    private applyLogicalAppearance() {
+        const material = this.mesh.material as THREE.MeshStandardMaterial;
+        const reaction = this.impactReactionSnapshot;
+        if (reaction.flashActive) {
+            material.color.setHex(0xffffff);
+            material.emissive.setRGB(
+                reaction.flashIntensity,
+                reaction.flashIntensity,
+                reaction.flashIntensity
+            );
+            material.emissiveIntensity = 1;
+            return;
+        }
+        material.color.setHex(this.baseColor);
+        material.emissive.setHex(0x000000);
+        material.emissiveIntensity = 0;
     }
 
     private updateHpBar() {

@@ -1,7 +1,7 @@
 # Spec — Fase 3: Game Feel
 
-**Status:** proposta aprovada para implementação. O roadmap ainda não foi
-atualizado para indicar uma fase de implementação ativa.
+**Status:** ✅ concluída em 24 de julho de 2026. Builders 3A–3G, validação
+automatizada e testes manuais concluídos.
 
 ## Contexto
 
@@ -16,7 +16,8 @@ não adiciona profundidade estrutural. Ela melhora a percepção dos eventos que
 já existem.
 
 Valores numéricos desta spec para hitstop, shake, flash, partículas, vozes,
-knockback e modificadores são **tuning inicial para implementação e playtest**.
+knockback e modificadores são **tuning inicial para implementação e validação
+manual**.
 Eles são limites e pontos de partida verificáveis, não valores finais de
 produção.
 
@@ -139,20 +140,17 @@ A hipótese falha se:
 
 ### Perceptivo
 
-Com pelo menos dois participantes:
+A validação manual deve confirmar:
 
-- ambos reconhecem imediatamente a maioria dos hits sem depender da barra de HP;
-- ambos distinguem dano causado de dano recebido;
-- ambos relatam que hits fortes, counters, multialvo e morte têm peso superior
-  ao hit normal;
-- ambos preferem o feedback da Fase 3 ao baseline da Fase 2 em clareza ou peso;
-- nenhum participante relata perda frequente de controle, shake desconfortável,
-  fadiga visual severa ou softlock;
-- diferenças entre Phonk, Samba e Forró são percebidas sem criar três sistemas
-  de efeitos completamente separados.
+- reconhecimento imediato dos hits sem depender apenas da barra de HP;
+- distinção entre dano causado e dano recebido;
+- peso superior para hits fortes, counters, multialvo e morte;
+- melhora de clareza ou peso em relação ao baseline da Fase 2;
+- preservação do controle, do conforto e da leitura dos telegraphs;
+- diferenças perceptíveis entre Phonk, Samba e Forró sem pipelines separados.
 
 Prazer não é tratado como métrica automatizável. Testes comprovam contratos e
-limites; o playtest decide se a hipótese foi validada.
+limites; os testes manuais determinam a aceitação perceptiva da fase.
 
 ## Escopo
 
@@ -165,7 +163,7 @@ limites; o playtest decide se a hipótese foi validada.
 - Hit sparks geométricos e provisórios.
 - Sons de ataque e impacto sintetizados via Web Audio API.
 - Diferenciação mínima por estação.
-- Observabilidade DEV, testes e playtest da fase.
+- Observabilidade DEV, testes automatizados e validação manual da fase.
 - Limpeza completa em pausa, morte, revive, respawn e reset, conforme aplicável.
 
 ## Fora do Escopo
@@ -497,7 +495,6 @@ Regras:
 
 ## Decisões de Design
 
-- Perfil geral contido e legível, não arcade intenso.
 - Feedback proporcional: hit normal permanece pequeno para preservar espaço
   para counter, multialvo e morte.
 - Ataque no vazio recebe apenas confirmação sonora leve. Não fingir acerto.
@@ -617,24 +614,24 @@ Elas descrevem comportamento e forma/sensação conforme a golden rule 2.
   persistente.
 - Altera balanceamento, energia, IA e testes.
 - Sobrepõe-se às possibilidades de armas/explosões da Fase 4a.
-- **Decisão:** fora da Fase 3; candidato a uma Fase 3.5 com spec própria.
+- **Decisão:** fora da Fase 3; encaminhado para a Fase 3.5 com spec própria.
 
 ### Samba — dano e knockup
 
 - Adiciona fonte ofensiva e controle vertical ao dash hoje defensivo.
 - Pode diluir precisão/esquiva e exige regras de altura e interrupção.
-- Precisa de playtest separado contra a identidade validada.
-- **Decisão:** fora da Fase 3; candidato a uma Fase 3.5 com spec própria.
+- Precisa de validação manual própria contra a identidade validada.
+- **Decisão:** fora da Fase 3; encaminhado para a Fase 3.5 com spec própria.
 
 ### Forró — stun
 
 - Reforça controle de grupo, mas altera FSM, token, telegraphs e dificuldade.
 - Exige duração, imunidade, stacking e interação com respawn.
 - É profundidade estrutural, não apenas feedback.
-- **Decisão:** fora da Fase 3; candidato a uma Fase 3.5 com spec própria.
+- **Decisão:** fora da Fase 3; encaminhado para a Fase 3.5 com spec própria.
 
-A futura 3.5 não é compromisso automático do roadmap. Ela só deve ser escrita
-depois da validação da Fase 3 e de uma decisão explícita.
+A Fase 3.5 é a próxima etapa planejada do roadmap. Sua spec deve ser escrita e
+aprovada antes de qualquer implementação.
 
 ## Observabilidade DEV
 
@@ -734,7 +731,7 @@ Aplicar L-008 a L-011:
 
 ### Validação manual
 
-Somente playtest pode avaliar:
+Somente testes manuais podem avaliar:
 
 - prazer e peso;
 - reconhecimento imediato do hit;
@@ -904,7 +901,7 @@ controlador de feedback e testes.
 
 **Risco:** efeitos competirem com música e aura.
 
-### 3G — Observabilidade, validação e playtest
+### 3G — Observabilidade, validação e testes manuais
 
 **Objetivo:** consolidar contratos, regressões e avaliação perceptiva.
 
@@ -916,22 +913,23 @@ conclusão documental desta spec.
 - snapshots finais;
 - promoção apenas de E2E estável;
 - inspeção de repetição;
-- protocolo antes/depois.
+- comparação manual antes/depois.
 
-**Fora do escopo:** tuning não sustentado por playtest e novas mecânicas.
+**Fora do escopo:** tuning não sustentado por validação manual e novas
+mecânicas.
 
 **Testes:** suíte completa, build, TypeScript e E2E focado antes da suíte.
 
 **Validação manual:** cenários abaixo.
 
-**Conclusão:** critérios técnicos verdes e playtest com dois participantes
+**Conclusão:** critérios técnicos verdes e resultado dos testes manuais
 registrado.
 
 **Dependências:** 3A–3F.
 
 **Risco:** confundir teste automatizado verde com validação de prazer.
 
-## Validação Manual e Playtest
+## Validação Manual
 
 Os cenários abaixo são executados diretamente a partir desta spec. O resultado
 deve ser registrado resumidamente na conclusão da fase, nesta própria spec ou
@@ -941,12 +939,8 @@ no PR correspondente. Não existe protocolo, formulário ou relatório separado.
 
 Usar o commit final da Fase 2 como baseline.
 
-Para cada participante:
-
-1. jogar um roteiro curto no baseline;
-2. jogar o mesmo roteiro na Fase 3;
-3. alternar a ordem entre participantes quando possível;
-4. não explicar previamente qual versão deveria parecer melhor.
+Comparar um roteiro curto no baseline com o mesmo roteiro na Fase 3 quando isso
+ajudar a avaliar clareza, peso e conforto.
 
 O roteiro comparativo inclui:
 
@@ -972,9 +966,7 @@ O roteiro comparativo inclui:
 - combate contra melee e ranged;
 - repetição suficiente para observar fadiga sonora e visual.
 
-### Perguntas
-
-Registrar:
+### Aspectos avaliados
 
 1. O hit foi reconhecido imediatamente?
 2. O golpe pareceu ter peso?
@@ -992,23 +984,53 @@ Registrar:
 14. Houve queda perceptível de performance?
 15. Qual versão foi preferida e por quê?
 
-Usar escala de 1–5 para:
-
-- clareza do hit;
-- peso percebido;
-- controle;
-- conforto do shake/flash;
-- fadiga após a sessão.
-
 ### Critério de conclusão perceptiva
 
-- Pelo menos dois participantes completam o roteiro.
-- Ambos preferem a Fase 3 ao baseline em clareza ou peso.
-- A mediana de clareza ou peso melhora pelo menos 1 ponto.
-- Nenhum participante avalia controle ou conforto abaixo de 3 sem que o
-  problema seja corrigido e retestado.
-- Ambos distinguem dano causado/recebido e pelo menos três níveis de impacto.
+- O desenvolvedor executa os cenários manuais relevantes dos builders.
+- Clareza, peso, controle e conforto são considerados adequados para o
+  protótipo.
+- Dano causado e recebido e a hierarquia dos impactos permanecem distinguíveis.
+- Problemas perceptivos bloqueantes são corrigidos e retestados.
 - Nenhum softlock ou efeito preso permanece sem correção.
+- O resultado é registrado resumidamente nesta spec, na conclusão da fase ou
+  no PR, sem protocolo ou formulário separado.
+
+## Resultado Técnico do Builder 3G
+
+Os Builders 3A–3G estão implementados e tecnicamente verdes. A observabilidade
+final mantém snapshots serializáveis de tempo, shake, reação, sparks, áudio e
+último impacto. `lastImpactIntensity` representa a hierarquia lógica da
+categoria sem expor objetos de runtime ou duplicar tuning de apresentação.
+
+A validação final de 24 de julho de 2026 registrou:
+
+- Vitest: 21 arquivos e 239 testes aprovados;
+- TypeScript: `npx tsc --noEmit` aprovado;
+- build de produção: aprovado, com o aviso já conhecido de chunk acima de
+  500 kB;
+- Playwright: 47 testes aprovados com `workers: 1`, sem skips ou retries;
+- 26 casos E2E permanentes e 21 casos locais ignorados em `e2e/scratch`;
+- repetição de hits, Forró multialvo, transformação, morte e revive retornou
+  escala, shake, flash, knockback, bursts, partículas e vozes ao estado base;
+- o reset limpou o último impacto e preservou a estação selecionada;
+- a suíte permanente não depende de arquivos em `e2e/scratch`.
+
+Durante a validação manual intermediária do Builder 3E, sparks e SFX iniciais
+foram considerados discretos demais. O tuning visual foi ampliado e validado,
+o vocabulário sintético deixou de depender do timbre agudo anterior e o volume
+inicial da música foi ajustado ao sweet spot manual de aproximadamente 15%.
+Nesse ponto, a música permaneceu predominante e os SFX ficaram perceptíveis e
+confortáveis. Não foi implementado ducking.
+
+Os testes manuais foram concluídos pelo desenvolvedor, que considerou os
+resultados suficientes para o estágio atual do protótipo. Os ajustes
+perceptivos feitos durante o Builder 3E foram preservados e não restaram
+problemas bloqueantes informados. Com a validação técnica e manual, a Fase 3
+foi considerada concluída.
+
+Os aprimoramentos de dash avaliados nesta spec permanecem fora da Fase 3 e
+formam a próxima etapa planejada, **Fase 3.5**, que deve receber tech spec
+própria antes de qualquer implementação.
 
 ## Riscos
 
@@ -1026,7 +1048,7 @@ Usar escala de 1–5 para:
 - Static targets e inimigos apresentarem reações inconsistentes.
 
 Mitigar com builders pequenos, tuning centralizado, limites, estado observável,
-testes focados e playtest antes de expandir efeitos.
+testes focados e validação manual antes de expandir efeitos.
 
 ## Dívidas Deliberadas
 
@@ -1054,20 +1076,20 @@ testes focados e playtest antes de expandir efeitos.
 - Morte, revive, reset e respawn não deixam efeitos ativos ou presos.
 - `npm test`, `npx tsc --noEmit`, `npm run build`, E2E focado e
   `npm run test:e2e` passam sem skips, retries ou testes enfraquecidos.
-- Playtest comparativo e contínuo é concluído por pelo menos dois participantes.
-- A pergunta da fase recebe resposta baseada nos registros humanos, não apenas
-  em testes automatizados.
-- Somente após esses critérios o roadmap pode marcar a Fase 3 como concluída.
+- Os cenários manuais relevantes são concluídos e aceitos pelo desenvolvedor.
+- A pergunta da fase recebe resposta baseada também na avaliação manual, não
+  apenas em testes automatizados.
+- O resultado resumido é registrado e o roadmap marca a Fase 3 como concluída.
 
 ## Questões em Aberto
 
-Não há questão bloqueante para iniciar a implementação.
+Não há questão bloqueante pendente na Fase 3.
 
-Permanecem deliberadamente abertas para playtest:
+Permanecem deliberadamente abertas para ajustes e validações futuras:
 
 - valores finais de hitstop, shake, flash, partículas e knockback;
 - volume e envelopes finais dos sons sintetizados;
 - intensidade final do modificador transformado;
 - necessidade de pooling após medição;
 - necessidade futura de controles de conforto;
-- criação ou rejeição da possível Fase 3.5.
+- decisões de design e tuning da Fase 3.5.

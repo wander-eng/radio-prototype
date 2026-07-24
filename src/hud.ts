@@ -1,4 +1,11 @@
+import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from './audio';
+
 export type EnergyHudState = 'empty' | 'charging' | 'full';
+
+export const HUD_AUDIO_DEFAULTS = Object.freeze({
+    music: DEFAULT_MUSIC_VOLUME,
+    sfx: DEFAULT_SFX_VOLUME
+});
 
 export const DEATH_OVERLAY_COPY = {
     title: 'Você morreu!',
@@ -165,11 +172,11 @@ export class UIManager {
                 <h2>CONFIGURAÇÕES</h2>
                 <div class="slider-group">
                     <label>VOLUME DA MÚSICA</label>
-                    <input type="range" id="vol-music" min="0" max="1" step="0.05" value="1">
+                    <input type="range" id="vol-music" min="0" max="1" step="0.05" value="${HUD_AUDIO_DEFAULTS.music}">
                 </div>
                 <div class="slider-group">
                     <label>VOLUME DOS EFEITOS (SFX)</label>
-                    <input type="range" id="vol-sfx" min="0" max="1" step="0.05" value="1">
+                    <input type="range" id="vol-sfx" min="0" max="1" step="0.05" value="${HUD_AUDIO_DEFAULTS.sfx}">
                 </div>
                 <button id="btn-back">VOLTAR</button>
             </div>

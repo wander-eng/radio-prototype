@@ -11,6 +11,7 @@ export class FollowCamera {
     public lerpSpeed = 5;
     public positionalOffset = new THREE.Vector3();
     public angularOffset = 0;
+    private readonly presentationOffset = new THREE.Vector3();
 
     constructor() {
         this.camera = new THREE.PerspectiveCamera(this.baseFov, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -18,6 +19,8 @@ export class FollowCamera {
     }
 
     public update(targetPosition: THREE.Vector3, delta: number) {
+        this.clearPresentationOffset();
+
         // 1. Aplica o Offset Orbital do Forró
         const currentOffset = this.baseOffset.clone();
         if (this.angularOffset !== 0) {
@@ -32,5 +35,24 @@ export class FollowCamera {
         
         const lookAtPosition = targetPosition.clone().add(new THREE.Vector3(0, 1, 0));
         this.camera.lookAt(lookAtPosition);
+    }
+
+    public applyPresentationOffset(offset: Readonly<{ x: number; y: number; z: number }>) {
+        this.clearPresentationOffset();
+        this.presentationOffset.set(offset.x, offset.y, offset.z);
+        this.camera.position.add(this.presentationOffset);
+    }
+
+    public clearPresentationOffset() {
+        this.camera.position.sub(this.presentationOffset);
+        this.presentationOffset.set(0, 0, 0);
+    }
+
+    public get presentationOffsetSnapshot() {
+        return Object.freeze({
+            x: this.presentationOffset.x,
+            y: this.presentationOffset.y,
+            z: this.presentationOffset.z
+        });
     }
 }

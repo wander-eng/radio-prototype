@@ -1,6 +1,10 @@
 import type { Player } from './player';
 import type { CombatTarget } from './combat-target';
 import type { EncounterSnapshot } from './encounter-controller';
+import type { ImpactEvent, ImpactKind } from './impact-event';
+import { impactIntensityForKind } from './impact-math';
+import { selectImpactPreset } from './impact-presets';
+import type { ActiveTimeSource } from './combat-time';
 import { StationId } from './radio';
 import type { RadioSystem } from './radio';
 
@@ -15,6 +19,19 @@ export interface GameState {
     sambaCounterRemaining: number;
     slowMotionActive: boolean;
     timeScale: number;
+    hitstopActive: boolean;
+    hitstopRemaining: number;
+    effectiveTimeScale: number;
+    activeTimeSources: readonly ActiveTimeSource[];
+    flashingEntityIds: readonly string[];
+    knockbackEntityIds: readonly string[];
+    cameraShakeActive: boolean;
+    cameraShakeIntensity: number;
+    cameraShakeImpulseCount: number;
+    impactParticleCount: number;
+    impactBurstCount: number;
+    activeImpactVoiceCount: number;
+    activeImpactEffectCount: number;
     encounterStatus: 'active' | 'paused' | 'awaiting-revive' | 'reviving';
     inputBlocked: boolean;
     deathOverlayVisible: boolean;
@@ -27,6 +44,13 @@ export interface GameState {
     lastCommittedAimSource: 'direct' | 'assisted' | 'none';
     lastCommittedAimTargetId: string | null;
     attackCommitCount: number;
+    lastImpactKind: ImpactKind | null;
+    lastImpactActionId: number | null;
+    lastImpactIntensity: number | null;
+    lastImpactPreset: string | null;
+    lastImpactStation: ImpactEvent['station'] | null;
+    lastImpactTransformed: boolean | null;
+    lastImpact: ImpactEvent | null;
     player: {
         x: number;
         y: number;
@@ -56,6 +80,19 @@ export interface ObservableTransformationState {
     auraIntensity: number;
     timeScale: number;
     slowMotionActive: boolean;
+    hitstopActive: boolean;
+    hitstopRemaining: number;
+    effectiveTimeScale: number;
+    activeTimeSources: readonly ActiveTimeSource[];
+    flashingEntityIds: readonly string[];
+    knockbackEntityIds: readonly string[];
+    cameraShakeActive: boolean;
+    cameraShakeIntensity: number;
+    cameraShakeImpulseCount: number;
+    impactParticleCount: number;
+    impactBurstCount: number;
+    activeImpactVoiceCount: number;
+    activeImpactEffectCount: number;
     encounterStatus: GameState['encounterStatus'];
     inputBlocked: boolean;
     deathOverlayVisible: boolean;
@@ -71,6 +108,7 @@ export interface GameTestControls {
     advanceTransformation(deltaSeconds: number): void;
     setPlayerPosition(x: number, y: number, z: number): void;
     setEnemyPosition(id: string, x: number, y: number, z: number): void;
+    setCombatTargetPosition(id: string, x: number, y: number, z: number): void;
     spawnProjectileAtPlayer(x: number, y: number, z: number): void;
     damagePlayer(damage: number): void;
     revivePlayer(): Promise<void>;
@@ -79,6 +117,8 @@ export interface GameTestControls {
     resetEncounter(): void;
     setEnemyHp(id: string, hp: number): void;
     openSambaDodgeWindow(): void;
+    prepareSambaCounter(): void;
+    resolvePlayerAttack(): boolean;
     resolvePendingMeleeAttack(id: string): boolean;
 }
 
@@ -99,7 +139,8 @@ export function updateGameState(
     radioSystem: RadioSystem,
     targets: readonly CombatTarget[],
     encounter: EncounterSnapshot,
-    transformationState: ObservableTransformationState
+    transformationState: ObservableTransformationState,
+    lastImpact: ImpactEvent | null = null
 ) {
     if (!import.meta.env.DEV) return;
 
@@ -119,6 +160,19 @@ export function updateGameState(
         sambaCounterRemaining: player.sambaCounterRemaining,
         slowMotionActive: transformationState.slowMotionActive,
         timeScale: transformationState.timeScale,
+        hitstopActive: transformationState.hitstopActive,
+        hitstopRemaining: transformationState.hitstopRemaining,
+        effectiveTimeScale: transformationState.effectiveTimeScale,
+        activeTimeSources: [...transformationState.activeTimeSources],
+        flashingEntityIds: [...transformationState.flashingEntityIds],
+        knockbackEntityIds: [...transformationState.knockbackEntityIds],
+        cameraShakeActive: transformationState.cameraShakeActive,
+        cameraShakeIntensity: transformationState.cameraShakeIntensity,
+        cameraShakeImpulseCount: transformationState.cameraShakeImpulseCount,
+        impactParticleCount: transformationState.impactParticleCount,
+        impactBurstCount: transformationState.impactBurstCount,
+        activeImpactVoiceCount: transformationState.activeImpactVoiceCount,
+        activeImpactEffectCount: transformationState.activeImpactEffectCount,
         encounterStatus: transformationState.encounterStatus,
         inputBlocked: transformationState.inputBlocked,
         deathOverlayVisible: transformationState.deathOverlayVisible,
@@ -131,6 +185,15 @@ export function updateGameState(
         lastCommittedAimSource: player.lastCommittedAimSource,
         lastCommittedAimTargetId: player.lastCommittedAimTargetId,
         attackCommitCount: player.attackCommitCount,
+        lastImpactKind: lastImpact?.kind ?? null,
+        lastImpactActionId: lastImpact?.actionId ?? null,
+        lastImpactIntensity: lastImpact
+            ? impactIntensityForKind(lastImpact.kind)
+            : null,
+        lastImpactPreset: lastImpact ? selectImpactPreset(lastImpact).id : null,
+        lastImpactStation: lastImpact?.station ?? null,
+        lastImpactTransformed: lastImpact?.transformed ?? null,
+        lastImpact,
         player: {
             x: player.mesh.position.x,
             y: player.mesh.position.y,
