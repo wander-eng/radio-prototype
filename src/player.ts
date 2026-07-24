@@ -24,6 +24,12 @@ import {
     classifyOffensiveImpact,
     phonkImpactReachesDamageCap
 } from './impact-math';
+import type { ImpactEvent } from './impact-event';
+import {
+    LocalImpactReaction,
+    type ImpactReactive,
+    type ImpactReactionSnapshot
+} from './impact-reaction';
 import {
     decideForroDashEnergy,
     decideSambaCounterHit,
@@ -33,7 +39,7 @@ import {
 
 const DAMAGE_INVULNERABILITY_SECONDS = 0.5;
 
-export class Player {
+export class Player implements ImpactReactive {
     public mesh: THREE.Mesh;
     private hud: UIManager;
     private onEnergyHit: (successfulHitCount: number) => void;
@@ -85,6 +91,10 @@ export class Player {
     private committedAimTargetId: string | null = null;
     private committedAttackCount = 0;
     private readonly impact: ImpactEventDependencies;
+    private readonly impactReaction = new LocalImpactReaction();
+    private logicalColor = 0x0055ff;
+    private logicalEmissiveColor = 0x000000;
+    private logicalEmissiveIntensity = 0;
 
     constructor(
         hud: UIManager,
@@ -105,17 +115,17 @@ export class Player {
     }
 
     public setEmissiveColor(colorHex: number) {
-        const material = this.mesh.material as THREE.MeshStandardMaterial;
-        material.emissive.setHex(colorHex);
-        material.emissiveIntensity = 1.0; 
-        material.color.setHex(colorHex); 
+        this.logicalColor = colorHex;
+        this.logicalEmissiveColor = colorHex;
+        this.logicalEmissiveIntensity = 1;
+        this.applyLogicalAppearance();
     }
 
     public setNeutralColor() {
-        const material = this.mesh.material as THREE.MeshStandardMaterial;
-        material.color.setHex(0x0055ff);
-        material.emissive.setHex(0x000000);
-        material.emissiveIntensity = 0;
+        this.logicalColor = 0x0055ff;
+        this.logicalEmissiveColor = 0x000000;
+        this.logicalEmissiveIntensity = 0;
+        this.applyLogicalAppearance();
     }
 
     public get isDamageInvulnerable(): boolean {
@@ -182,6 +192,39 @@ export class Player {
         return this.dashHitTargets.size;
     }
 
+    public get impactReactionSnapshot(): ImpactReactionSnapshot {
+        return this.impactReaction.snapshot;
+    }
+
+    public applyImpactReaction(event: ImpactEvent, target: ImpactTargetResult) {
+        if (
+            event.kind !== 'player-damaged'
+            || target.damageAccepted <= 0
+            || target.targetId !== 'player'
+        ) {
+            return;
+        }
+        this.impactReaction.trigger(event, false);
+        this.applyLogicalAppearance();
+    }
+
+    public updateImpactReaction(
+        presentationDeltaSeconds: number,
+        gameplayDeltaSeconds: number
+    ) {
+        const displacement = this.impactReaction.update(
+            presentationDeltaSeconds,
+            gameplayDeltaSeconds
+        );
+        this.applyLogicalAppearance();
+        return displacement;
+    }
+
+    public resetImpactReaction() {
+        this.impactReaction.reset();
+        this.applyLogicalAppearance();
+    }
+
     public openSambaDodgeWindow() {
         if (this.isDead || this.lastStation !== StationId.SAMBA) return;
         this.sambaDodgeTimer = 0.2;
@@ -241,6 +284,7 @@ export class Player {
     }
 
     public prepareForDeathLifecycle() {
+        this.resetImpactReaction();
         this.stopLocalActions();
         this.clearSambaState();
         this.phonkCombo = 0;
@@ -758,6 +802,20 @@ export class Player {
 
     private toImpactVector(vector: { x: number; y: number; z: number }) {
         return { x: vector.x, y: vector.y, z: vector.z };
+    }
+
+    private applyLogicalAppearance() {
+        const material = this.mesh.material as THREE.MeshStandardMaterial;
+        const reaction = this.impactReactionSnapshot;
+        if (reaction.flashActive) {
+            material.color.setHex(0xffdddd);
+            material.emissive.setHex(0xff4444);
+            material.emissiveIntensity = reaction.flashIntensity;
+            return;
+        }
+        material.color.setHex(this.logicalColor);
+        material.emissive.setHex(this.logicalEmissiveColor);
+        material.emissiveIntensity = this.logicalEmissiveIntensity;
     }
 
 }

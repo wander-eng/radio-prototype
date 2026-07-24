@@ -3,9 +3,16 @@ import type { CombatHitResult, CombatTarget, CombatTargetState } from './combat-
 import { applyDamageToHp } from './combat-math';
 import {
     createLocalImpactDependencies,
-    type ImpactEventDependencies
+    type ImpactEventDependencies,
+    type ImpactVector3
 } from './impact-event';
 import { createPlayerAttackImpactEvent } from './impact-math';
+import type { ImpactEvent, ImpactTargetResult } from './impact-event';
+import {
+    LocalImpactReaction,
+    type ImpactReactive,
+    type ImpactReactionSnapshot
+} from './impact-reaction';
 import {
     advanceMeleeState,
     clampArenaPosition,
@@ -26,7 +33,7 @@ export const MELEE_ATTACK_DAMAGE = 20;
 export const MELEE_VERTICAL_TOLERANCE = 1.25;
 const BODY_SEPARATION_DISTANCE = 1;
 
-export class MeleeEnemy implements CombatTarget {
+export class MeleeEnemy implements CombatTarget, ImpactReactive {
     public readonly id: string;
     public readonly mesh: THREE.Mesh;
     public hp = 50;
@@ -41,7 +48,7 @@ export class MeleeEnemy implements CombatTarget {
     private readonly baseColor = new THREE.Color(0x8b1a1a);
     private readonly telegraphColor = new THREE.Color(0xffff00);
     private stateTimer = 0;
-    private flashTimer = 0;
+    private readonly impactReaction = new LocalImpactReaction();
     private readonly hpBarContainer: HTMLDivElement;
     private readonly hpBarFill: HTMLDivElement;
     private readonly attackToken: MeleeAttackToken;
@@ -98,7 +105,37 @@ export class MeleeEnemy implements CombatTarget {
         return this.telegraphActive ? windupProgress(this.stateTimer) : 0;
     }
 
-    public receiveHit(direction: THREE.Vector3, damage: number = 10): CombatHitResult {
+    public get impactReactionSnapshot(): ImpactReactionSnapshot {
+        return this.impactReaction.snapshot;
+    }
+
+    public applyImpactReaction(event: ImpactEvent, target: ImpactTargetResult): void {
+        if (target.targetId !== this.id || target.damageAccepted <= 0) return;
+        this.impactReaction.trigger(event, true);
+        this.applyLogicalAppearance();
+    }
+
+    public updateImpactReaction(
+        presentationDeltaSeconds: number,
+        gameplayDeltaSeconds: number
+    ): ImpactVector3 {
+        const displacement = this.impactReaction.update(
+            presentationDeltaSeconds,
+            gameplayDeltaSeconds
+        );
+        this.mesh.position.x += displacement.x;
+        this.mesh.position.z += displacement.z;
+        this.clampToArena();
+        this.applyLogicalAppearance();
+        return displacement;
+    }
+
+    public resetImpactReaction(): void {
+        this.impactReaction.reset();
+        this.applyLogicalAppearance();
+    }
+
+    public receiveHit(_direction: THREE.Vector3, damage: number = 10): CombatHitResult {
         if (this.state !== 'active') {
             return { applied: false, killed: false, damageAccepted: 0 };
         }
@@ -122,15 +159,6 @@ export class MeleeEnemy implements CombatTarget {
             return { applied: true, killed: true, damageAccepted: result.damageApplied };
         }
 
-        this.flashTimer = 0.1;
-        const knockback = direction.clone();
-        knockback.y = 0;
-        if (knockback.lengthSq() > 0) {
-            knockback.normalize().multiplyScalar(0.8);
-            this.mesh.position.add(knockback);
-            this.clampToArena();
-        }
-
         return { applied: true, killed: false, damageAccepted: result.damageApplied };
     }
 
@@ -149,7 +177,7 @@ export class MeleeEnemy implements CombatTarget {
 
         if (!player.isCurrentlyDashing) this.separateFromPlayer(player.mesh.position);
         this.clampToArena();
-        this.updatePresentation(delta, camera);
+        this.updatePresentation(camera);
     }
 
     public resolvePendingAttack(player: Player): boolean {
@@ -166,7 +194,7 @@ export class MeleeEnemy implements CombatTarget {
         this.state = 'active';
         this.meleeState = snapshot.state;
         this.stateTimer = 0;
-        this.flashTimer = 0;
+        this.resetImpactReaction();
         this.attackResolutionCount = 0;
         this.currentAttackActionId = null;
         this.mesh.visible = true;
@@ -314,31 +342,46 @@ export class MeleeEnemy implements CombatTarget {
         this.mesh.position.z = clamped.z;
     }
 
-    private updatePresentation(delta: number, camera: THREE.Camera) {
-        if (this.flashTimer > 0) this.flashTimer = Math.max(0, this.flashTimer - delta);
-
+    private updatePresentation(camera: THREE.Camera) {
         if (this.telegraphActive) {
             const progress = this.telegraphProgress;
-            this.material.color.copy(this.baseColor).lerp(this.telegraphColor, progress);
-            this.material.emissive.copy(this.telegraphColor).multiplyScalar(progress * 0.35);
             this.telegraphRing.visible = true;
             this.telegraphRing.scale.setScalar(1 - progress * 0.65);
-        } else if (this.flashTimer > 0) {
-            this.material.color.setHex(0xffffff);
-            this.material.emissive.setHex(0x555555);
         } else {
-            this.material.color.copy(this.baseColor);
-            this.material.emissive.setHex(0x000000);
+            this.telegraphRing.visible = false;
+            this.telegraphRing.scale.setScalar(1);
         }
 
+        this.applyLogicalAppearance();
         this.updateHpBarScreenPosition(camera);
     }
 
     private resetTelegraph() {
         this.telegraphRing.visible = false;
         this.telegraphRing.scale.setScalar(1);
+        this.applyLogicalAppearance();
+    }
+
+    private applyLogicalAppearance() {
+        const reaction = this.impactReaction.snapshot;
+        if (reaction.flashActive) {
+            this.material.color.setHex(0xffffff);
+            this.material.emissive.setHex(0xffffff);
+            this.material.emissiveIntensity = reaction.flashIntensity;
+            return;
+        }
+
+        if (this.telegraphActive) {
+            const progress = this.telegraphProgress;
+            this.material.color.copy(this.baseColor).lerp(this.telegraphColor, progress);
+            this.material.emissive.copy(this.telegraphColor);
+            this.material.emissiveIntensity = progress * 0.35;
+            return;
+        }
+
         this.material.color.copy(this.baseColor);
         this.material.emissive.setHex(0x000000);
+        this.material.emissiveIntensity = 1;
     }
 
     private updateHpBarScreenPosition(camera: THREE.Camera) {

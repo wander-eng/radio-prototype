@@ -2,6 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { GameScene } from './scene';
 import { FollowCamera } from './camera';
+import { CameraShakeController } from './camera-shake';
 import { Player } from './player';
 import { Target } from './target';
 import type { CombatTarget } from './combat-target';
@@ -20,19 +21,23 @@ import {
     energyGainForAttack
 } from './combat-math';
 import { clampArenaPosition } from './melee-math';
-import { createTimeStep, updateSlowMotionTimer } from './station-combat-math';
+import { CombatTimeController } from './combat-time';
 import {
     createImpactActionIdSource,
     ImpactEventStore,
+    type ImpactEvent,
     type ImpactEventDependencies,
     type ImpactStation
 } from './impact-event';
+import { isImpactReactive, type ImpactReactive } from './impact-reaction';
+import { ImpactSparkController } from './impact-sparks';
 
 const appContainer = document.querySelector<HTMLDivElement>('#app');
 if (!appContainer) throw new Error('Container #app não encontrado.');
 
 const gameScene = new GameScene(appContainer);
 const cameraSystem = new FollowCamera();
+const cameraShake = new CameraShakeController();
 const input = new InputManager();
 
 window.addEventListener('resize', () => {
@@ -43,8 +48,7 @@ window.addEventListener('resize', () => {
 const hudManager = new UIManager();
 let energy = 0;
 let transformed = false;
-let timeScale = 1;
-let slowMoTimer = 0;
+const combatTime = new CombatTimeController();
 const impactEventStore = new ImpactEventStore();
 let radioSystem: RadioSystem;
 hudManager.updateEnergy(energy);
@@ -57,10 +61,26 @@ const toImpactStation = (station: StationId | null): ImpactStation => {
 };
 
 const nextImpactActionId = createImpactActionIdSource();
+function dispatchImpactReaction(event: ImpactEvent) {
+    for (const targetResult of event.targets) {
+        const target = targetResult.targetId === 'player'
+            ? player
+            : targets.find(candidate => candidate.id === targetResult.targetId);
+        if (isImpactReactive(target)) {
+            target.applyImpactReaction(event, targetResult);
+        }
+    }
+}
+
 const impactDependencies: ImpactEventDependencies = {
     nextActionId: nextImpactActionId,
     emit: (event) => {
         impactEventStore.record(event);
+        combatTime.requestHitstop(event);
+        dispatchImpactReaction(event);
+        cameraShake.request(event);
+        impactSparks.request(event);
+        audioManager.playImpact(event);
     },
     getContext: () => ({
         station: toImpactStation(radioSystem.currentStation),
@@ -69,8 +89,7 @@ const impactDependencies: ImpactEventDependencies = {
 };
 
 const beginSambaSlowMotion = () => {
-    timeScale = 0.5;
-    slowMoTimer = 0.15;
+    combatTime.startSambaSlowMotion();
 };
 
 const setEnergy = (nextEnergy: number) => {
@@ -103,8 +122,32 @@ staticTargets.forEach(target => gameScene.scene.add(target.mesh));
 const encounter = new EncounterController(gameScene.scene, player, impactDependencies);
 const targets: CombatTarget[] = [...staticTargets, ...encounter.combatTargets];
 
+const impactReactiveEntities = (): Array<{ id: string; entity: ImpactReactive }> => {
+    const entities: Array<{ id: string; value: unknown }> = [
+        { id: 'player', value: player },
+        ...targets.map(target => ({ id: target.id, value: target }))
+    ];
+    return entities
+        .filter(({ value }) => isImpactReactive(value))
+        .map(({ id, value }) => ({ id, entity: value as ImpactReactive }));
+};
+
+const updateImpactReactions = (
+    presentationDeltaSeconds: number,
+    gameplayDeltaSeconds: number
+) => {
+    impactReactiveEntities().forEach(({ entity }) => {
+        entity.updateImpactReaction(presentationDeltaSeconds, gameplayDeltaSeconds);
+    });
+};
+
+const resetImpactReactions = () => {
+    impactReactiveEntities().forEach(({ entity }) => entity.resetImpactReaction());
+};
+
 const audioManager = new AudioManager();
 const effectsManager = new EffectsManager(gameScene.scene, cameraSystem);
+const impactSparks = new ImpactSparkController(gameScene.scene);
 radioSystem = new RadioSystem(player, gameScene, audioManager, effectsManager);
 
 const tryActivateTransformation = () => {
@@ -129,8 +172,12 @@ let reviveInProgress = false;
 let reviveCount = 0;
 
 const resetPlayerSystemsForDeath = () => {
-    timeScale = 1;
-    slowMoTimer = 0;
+    combatTime.clearTransientSources();
+    cameraShake.reset();
+    cameraSystem.clearPresentationOffset();
+    impactSparks.reset();
+    audioManager.resetImpactVoices();
+    resetImpactReactions();
     player.prepareForDeathLifecycle();
     setEnergy(0);
     transformed = false;
@@ -140,6 +187,7 @@ const resetPlayerSystemsForDeath = () => {
 const beginDeathLifecycle = () => {
     if (!player.isDead || deathLifecycleActive) return;
     deathLifecycleActive = true;
+    combatTime.setDead(true);
     resetPlayerSystemsForDeath();
     hudManager.showDeathOverlay();
 };
@@ -157,6 +205,7 @@ const revivePlayer = async () => {
     encounter.reset();
     player.resetAfterDeath();
     impactEventStore.reset();
+    combatTime.reset();
     await waitForPresentationFrame();
     hudManager.completeDeathRevive();
     deathLifecycleActive = false;
@@ -168,6 +217,7 @@ const resetEncounterImmediately = () => {
     encounter.reset();
     player.resetAfterDeath();
     impactEventStore.reset();
+    combatTime.reset();
     hudManager.completeDeathRevive();
     deathLifecycleActive = false;
     reviveInProgress = false;
@@ -285,19 +335,45 @@ const timer = new THREE.Timer();
 
 const publishGameState = (encounterStatus: 'active' | 'paused' | 'awaiting-revive' | 'reviving') => {
     const currentAuraIntensity = auraIntensityForState(energy, transformed);
+    const timeSnapshot = combatTime.snapshot;
+    const cameraShakeSnapshot = cameraShake.snapshot;
+    const impactSparkSnapshot = impactSparks.snapshot;
+    const reactiveEntities = impactReactiveEntities();
+    const flashingEntityIds = reactiveEntities
+        .filter(({ entity }) => entity.impactReactionSnapshot.flashActive)
+        .map(({ id }) => id);
+    const knockbackEntityIds = reactiveEntities
+        .filter(({ entity }) => entity.impactReactionSnapshot.knockbackActive)
+        .map(({ id }) => id);
     updateGameState(player, radioSystem, targets, encounter.snapshot(), {
         energy,
         transformed,
         auraIntensity: currentAuraIntensity,
-        timeScale,
-        slowMotionActive: slowMoTimer > 0,
+        timeScale: player.isDead || deathLifecycleActive
+            ? 1
+            : timeSnapshot.effectiveTimeScale,
+        slowMotionActive: timeSnapshot.sambaSlowMotionActive,
+        hitstopActive: timeSnapshot.hitstopActive,
+        hitstopRemaining: timeSnapshot.hitstopRemaining,
+        effectiveTimeScale: timeSnapshot.effectiveTimeScale,
+        activeTimeSources: timeSnapshot.activeTimeSources,
         encounterStatus,
         inputBlocked: hudManager.isPaused || player.isDead || deathLifecycleActive,
         activeTrackId: radioSystem.activeTrackId,
         deathOverlayVisible: hudManager.deathOverlayVisible,
         reviveInProgress,
         reviveCount,
-        encounterFrozen: hudManager.isPaused || deathLifecycleActive
+        encounterFrozen: hudManager.isPaused || deathLifecycleActive,
+        flashingEntityIds,
+        knockbackEntityIds,
+        cameraShakeActive: cameraShakeSnapshot.active,
+        cameraShakeIntensity: cameraShakeSnapshot.intensity,
+        cameraShakeImpulseCount: cameraShakeSnapshot.activeImpulseCount,
+        impactParticleCount: impactSparkSnapshot.particleCount,
+        impactBurstCount: impactSparkSnapshot.burstCount,
+        activeImpactVoiceCount: audioManager.activeImpactVoiceCount,
+        activeImpactEffectCount:
+            impactSparkSnapshot.burstCount + audioManager.activeImpactVoiceCount
     }, impactEventStore.lastImpact);
 };
 
@@ -306,56 +382,78 @@ function animate() {
     
     timer.update();
     const unscaledDelta = timer.getDelta();
-    
+
+    combatTime.setPaused(hudManager.isPaused);
+    cameraShake.setPaused(hudManager.isPaused);
+    impactSparks.setPaused(hudManager.isPaused);
+
     // SE PAUSADO: Interrompe a lógica matemática, congelando movimento e física no lugar
     if (hudManager.isPaused) {
+        cameraSystem.clearPresentationOffset();
         publishGameState('paused');
         gameScene.renderer.render(gameScene.scene, cameraSystem.camera);
         return;
     }
 
-    let cameraDelta = 0;
+    combatTime.setDead(player.isDead || deathLifecycleActive);
+    let presentationDelta = unscaledDelta;
+    let gameplayDelta = 0;
     if (player.isDead || deathLifecycleActive) {
         beginDeathLifecycle();
     } else {
-        slowMoTimer = updateSlowMotionTimer(slowMoTimer, unscaledDelta);
-        if (slowMoTimer === 0) timeScale = 1;
-        const timeStep = createTimeStep(unscaledDelta, timeScale);
-        const delta = timeStep.scaledDeltaSeconds;
-        cameraDelta = delta;
+        const timeStep = combatTime.advance(unscaledDelta);
+        gameplayDelta = timeStep.gameplayDeltaSeconds;
+        presentationDelta = timeStep.presentationDeltaSeconds;
 
-        if (input.consumePress('KeyR')) tryActivateTransformation();
+        if (gameplayDelta > 0) {
+            if (input.consumePress('KeyR')) tryActivateTransformation();
 
-        player.update(
-            delta,
-            input,
-            cameraSystem.camera,
-            targets,
-            radioSystem.currentStation,
-            encounter.combatTargets
-        );
-        const clampedPlayerPosition = clampArenaPosition(player.mesh.position);
-        player.mesh.position.x = clampedPlayerPosition.x;
-        player.mesh.position.z = clampedPlayerPosition.z;
-        if (radioSystem.currentStation) encounter.update(delta, cameraSystem.camera);
+            player.update(
+                gameplayDelta,
+                input,
+                cameraSystem.camera,
+                targets,
+                radioSystem.currentStation,
+                encounter.combatTargets
+            );
+            const clampedPlayerPosition = clampArenaPosition(player.mesh.position);
+            player.mesh.position.x = clampedPlayerPosition.x;
+            player.mesh.position.z = clampedPlayerPosition.z;
+            if (radioSystem.currentStation) {
+                encounter.update(gameplayDelta, cameraSystem.camera);
+            }
+        }
 
         if (player.isDead) {
             beginDeathLifecycle();
         } else {
-            staticTargets.forEach(target => target.update(delta, cameraSystem.camera));
+            if (gameplayDelta > 0) {
+                staticTargets.forEach(target =>
+                    target.update(gameplayDelta, cameraSystem.camera)
+                );
+            }
             updateTransformation(unscaledDelta);
         }
     }
 
-    if (!deathLifecycleActive) cameraSystem.update(player.mesh.position, cameraDelta);
+    if (!deathLifecycleActive) {
+        updateImpactReactions(presentationDelta, gameplayDelta);
+    }
+
+    if (!deathLifecycleActive) {
+        cameraSystem.update(player.mesh.position, presentationDelta);
+    }
     const currentAuraIntensity = auraIntensityForState(energy, transformed);
     if (!deathLifecycleActive) {
         effectsManager.update(
-            unscaledDelta,
+            presentationDelta,
             player.mesh.position,
             radioSystem.currentStation,
             currentAuraIntensity
         );
+        impactSparks.update(presentationDelta);
+        audioManager.updateImpactVoices(presentationDelta);
+        cameraSystem.applyPresentationOffset(cameraShake.advance(presentationDelta));
     }
     
     // NOVO: Exposição de estado contínua para o Playwright

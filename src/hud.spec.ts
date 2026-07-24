@@ -3,8 +3,15 @@ import {
     DEATH_OVERLAY_COPY,
     DeathOverlayGate,
     energyHudState,
+    HUD_AUDIO_DEFAULTS,
     HUD_CONTROL_HINTS
 } from './hud';
+
+describe('HUD_AUDIO_DEFAULTS', () => {
+    it('inicia música em 15% e preserva SFX em 100%', () => {
+        expect(HUD_AUDIO_DEFAULTS).toEqual({ music: 0.15, sfx: 1 });
+    });
+});
 
 describe('energyHudState', () => {
     it('identifica energia vazia', () => {

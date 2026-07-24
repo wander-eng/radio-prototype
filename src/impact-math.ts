@@ -29,6 +29,21 @@ export interface PlayerAttackImpactInput {
     readonly result: PlayerAttackDecision;
 }
 
+const IMPACT_INTENSITY: Readonly<Record<ImpactKind, number>> = {
+    miss: 0,
+    'samba-dodge': 1,
+    normal: 2,
+    'phonk-strong': 3,
+    'samba-counter': 3,
+    'forro-multi': 4,
+    'enemy-kill': 5,
+    'player-damaged': 6
+};
+
+export function impactIntensityForKind(kind: ImpactKind): number {
+    return IMPACT_INTENSITY[kind];
+}
+
 export function phonkImpactReachesDamageCap(
     comboBeforeAction: number,
     successfulHitCount: number

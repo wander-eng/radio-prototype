@@ -1,7 +1,8 @@
 # Spec — Fase 3: Game Feel
 
-**Status:** proposta aprovada para implementação. O roadmap ainda não foi
-atualizado para indicar uma fase de implementação ativa.
+**Status:** implementação técnica dos Builders 3A–3G concluída; validação
+perceptiva final com dois participantes pendente. O roadmap ainda não deve
+marcar a fase como concluída.
 
 ## Contexto
 
@@ -497,7 +498,6 @@ Regras:
 
 ## Decisões de Design
 
-- Perfil geral contido e legível, não arcade intenso.
 - Feedback proporcional: hit normal permanece pequeno para preservar espaço
   para counter, multialvo e morte.
 - Ataque no vazio recebe apenas confirmação sonora leve. Não fingir acerto.
@@ -916,7 +916,7 @@ conclusão documental desta spec.
 - snapshots finais;
 - promoção apenas de E2E estável;
 - inspeção de repetição;
-- protocolo antes/depois.
+- comparação manual antes/depois.
 
 **Fora do escopo:** tuning não sustentado por playtest e novas mecânicas.
 
@@ -1009,6 +1009,37 @@ Usar escala de 1–5 para:
   problema seja corrigido e retestado.
 - Ambos distinguem dano causado/recebido e pelo menos três níveis de impacto.
 - Nenhum softlock ou efeito preso permanece sem correção.
+
+## Resultado Técnico do Builder 3G
+
+Os Builders 3A–3G estão implementados e tecnicamente verdes. A observabilidade
+final mantém snapshots serializáveis de tempo, shake, reação, sparks, áudio e
+último impacto. `lastImpactIntensity` representa a hierarquia lógica da
+categoria sem expor objetos de runtime ou duplicar tuning de apresentação.
+
+A validação final de 24 de julho de 2026 registrou:
+
+- Vitest: 21 arquivos e 239 testes aprovados;
+- TypeScript: `npx tsc --noEmit` aprovado;
+- build de produção: aprovado, com o aviso já conhecido de chunk acima de
+  500 kB;
+- Playwright: 47 testes aprovados com `workers: 1`, sem skips ou retries;
+- 26 casos E2E permanentes e 21 casos locais ignorados em `e2e/scratch`;
+- repetição de hits, Forró multialvo, transformação, morte e revive retornou
+  escala, shake, flash, knockback, bursts, partículas e vozes ao estado base;
+- o reset limpou o último impacto e preservou a estação selecionada;
+- a suíte permanente não depende de arquivos em `e2e/scratch`.
+
+Durante a validação manual intermediária do Builder 3E, sparks e SFX iniciais
+foram considerados discretos demais. O tuning visual foi ampliado e validado,
+o vocabulário sintético deixou de depender do timbre agudo anterior e o volume
+inicial da música foi ajustado ao sweet spot manual de aproximadamente 15%.
+Nesse ponto, a música permaneceu predominante e os SFX ficaram perceptíveis e
+confortáveis. Não foi implementado ducking.
+
+A validação comparativa e contínua desta seção ainda não foi registrada para
+dois participantes. Portanto, a pergunta perceptiva da fase permanece em
+aberto e a Fase 3 não está integralmente concluída.
 
 ## Riscos
 

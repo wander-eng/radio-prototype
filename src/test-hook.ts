@@ -2,6 +2,9 @@ import type { Player } from './player';
 import type { CombatTarget } from './combat-target';
 import type { EncounterSnapshot } from './encounter-controller';
 import type { ImpactEvent, ImpactKind } from './impact-event';
+import { impactIntensityForKind } from './impact-math';
+import { selectImpactPreset } from './impact-presets';
+import type { ActiveTimeSource } from './combat-time';
 import { StationId } from './radio';
 import type { RadioSystem } from './radio';
 
@@ -16,6 +19,19 @@ export interface GameState {
     sambaCounterRemaining: number;
     slowMotionActive: boolean;
     timeScale: number;
+    hitstopActive: boolean;
+    hitstopRemaining: number;
+    effectiveTimeScale: number;
+    activeTimeSources: readonly ActiveTimeSource[];
+    flashingEntityIds: readonly string[];
+    knockbackEntityIds: readonly string[];
+    cameraShakeActive: boolean;
+    cameraShakeIntensity: number;
+    cameraShakeImpulseCount: number;
+    impactParticleCount: number;
+    impactBurstCount: number;
+    activeImpactVoiceCount: number;
+    activeImpactEffectCount: number;
     encounterStatus: 'active' | 'paused' | 'awaiting-revive' | 'reviving';
     inputBlocked: boolean;
     deathOverlayVisible: boolean;
@@ -30,6 +46,10 @@ export interface GameState {
     attackCommitCount: number;
     lastImpactKind: ImpactKind | null;
     lastImpactActionId: number | null;
+    lastImpactIntensity: number | null;
+    lastImpactPreset: string | null;
+    lastImpactStation: ImpactEvent['station'] | null;
+    lastImpactTransformed: boolean | null;
     lastImpact: ImpactEvent | null;
     player: {
         x: number;
@@ -60,6 +80,19 @@ export interface ObservableTransformationState {
     auraIntensity: number;
     timeScale: number;
     slowMotionActive: boolean;
+    hitstopActive: boolean;
+    hitstopRemaining: number;
+    effectiveTimeScale: number;
+    activeTimeSources: readonly ActiveTimeSource[];
+    flashingEntityIds: readonly string[];
+    knockbackEntityIds: readonly string[];
+    cameraShakeActive: boolean;
+    cameraShakeIntensity: number;
+    cameraShakeImpulseCount: number;
+    impactParticleCount: number;
+    impactBurstCount: number;
+    activeImpactVoiceCount: number;
+    activeImpactEffectCount: number;
     encounterStatus: GameState['encounterStatus'];
     inputBlocked: boolean;
     deathOverlayVisible: boolean;
@@ -127,6 +160,19 @@ export function updateGameState(
         sambaCounterRemaining: player.sambaCounterRemaining,
         slowMotionActive: transformationState.slowMotionActive,
         timeScale: transformationState.timeScale,
+        hitstopActive: transformationState.hitstopActive,
+        hitstopRemaining: transformationState.hitstopRemaining,
+        effectiveTimeScale: transformationState.effectiveTimeScale,
+        activeTimeSources: [...transformationState.activeTimeSources],
+        flashingEntityIds: [...transformationState.flashingEntityIds],
+        knockbackEntityIds: [...transformationState.knockbackEntityIds],
+        cameraShakeActive: transformationState.cameraShakeActive,
+        cameraShakeIntensity: transformationState.cameraShakeIntensity,
+        cameraShakeImpulseCount: transformationState.cameraShakeImpulseCount,
+        impactParticleCount: transformationState.impactParticleCount,
+        impactBurstCount: transformationState.impactBurstCount,
+        activeImpactVoiceCount: transformationState.activeImpactVoiceCount,
+        activeImpactEffectCount: transformationState.activeImpactEffectCount,
         encounterStatus: transformationState.encounterStatus,
         inputBlocked: transformationState.inputBlocked,
         deathOverlayVisible: transformationState.deathOverlayVisible,
@@ -141,6 +187,12 @@ export function updateGameState(
         attackCommitCount: player.attackCommitCount,
         lastImpactKind: lastImpact?.kind ?? null,
         lastImpactActionId: lastImpact?.actionId ?? null,
+        lastImpactIntensity: lastImpact
+            ? impactIntensityForKind(lastImpact.kind)
+            : null,
+        lastImpactPreset: lastImpact ? selectImpactPreset(lastImpact).id : null,
+        lastImpactStation: lastImpact?.station ?? null,
+        lastImpactTransformed: lastImpact?.transformed ?? null,
         lastImpact,
         player: {
             x: player.mesh.position.x,

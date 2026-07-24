@@ -3,6 +3,7 @@ import type { PlayerAttackDecision } from './combat-math';
 import {
     classifyOffensiveImpact,
     classifyPlayerAttackImpact,
+    impactIntensityForKind,
     phonkImpactReachesDamageCap
 } from './impact-math';
 import {
@@ -36,6 +37,25 @@ const playerDecision = (
 });
 
 describe('impact classification', () => {
+    it('exposes the perceptual hierarchy as a stable observable intensity', () => {
+        expect(impactIntensityForKind('miss')).toBe(0);
+        expect(impactIntensityForKind('samba-dodge')).toBeLessThan(
+            impactIntensityForKind('normal')
+        );
+        expect(impactIntensityForKind('phonk-strong')).toBe(
+            impactIntensityForKind('samba-counter')
+        );
+        expect(impactIntensityForKind('normal')).toBeLessThan(
+            impactIntensityForKind('forro-multi')
+        );
+        expect(impactIntensityForKind('forro-multi')).toBeLessThan(
+            impactIntensityForKind('enemy-kill')
+        );
+        expect(impactIntensityForKind('enemy-kill')).toBeLessThan(
+            impactIntensityForKind('player-damaged')
+        );
+    });
+
     it('classifies miss and normal without allowing both in the same action', () => {
         expect(classifyOffensiveImpact({
             source: 'basic-attack',
